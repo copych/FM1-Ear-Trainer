@@ -41,7 +41,8 @@ available. Build outputs appear under `melodee/build/` and `build/site/`.
 
 ## Development packages and hardware
 
-Current packages retain the inherited `FM-1_900` development identity. They
+Project builds use `project.json`: version 0.0.8 and dedicated `FM-1_327008`
+identity. Earlier prototypes used shared `FM-1_900`. These development builds
 are not official Melodee releases or hardware-qualified builds. Back up the
 actual unit and confirm its matching recovery procedure before installing.
 Both known flash IDs pass source/host checks; physical revision compatibility,

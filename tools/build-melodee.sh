@@ -8,7 +8,7 @@ if ! node --version >/dev/null 2>&1; then
 fi
 cd "$ROOT/melodee"
 case "${1:-target}" in
-  target) exec sh build.sh ;;
+  target) exec sh build.sh --project ../project.json ;;
   host) mkdir -p build/ear-baseline
         cc -O2 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src tests/hostsim.c -lm -o build/ear-baseline/hostsim
         CHORD=5 VOICES=1 SENDS=0,0,0 exec build/ear-baseline/hostsim 12 0 0 build/ear-baseline/tine-ep.wav ;;

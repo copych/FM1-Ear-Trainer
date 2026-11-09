@@ -8,7 +8,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 FW = ROOT / "melodee"
 OUT = ROOT / "build/site"
-SITE_VERSION = "0.0.8"
+PROJECT = json.loads((ROOT / "project.json").read_text())
+SITE_VERSION = PROJECT["version"]
 sys.path.insert(0, str(FW / "web"))
 import make_site
 
@@ -18,7 +19,8 @@ for src in (FW / "build/melodee.fwsc", FW / "build/melodee-res.bin", FW / "build
 
 # Retain upstream package/bootloader validation, resource pairing, licenses,
 # backup editor and updater. This writes local files only; never publishes.
-make_site.main(FW / "build/melodee.fwsc", SITE_VERSION, OUT, manual=ROOT / "web/guide")
+assert make_site.product_of((FW / "build/melodee.fwsc").read_bytes()) == PROJECT["product"], "Build project target before preparing site"
+make_site.main(FW / "build/melodee.fwsc", SITE_VERSION, OUT, manual=ROOT / "web/guide", expected_product=PROJECT["product"])
 inst = OUT / "webapp/installer/index.html"
 page = inst.read_text(encoding="utf-8")
 page = page.replace(f"melodee-{SITE_VERSION}.fwsc", "ear-trainer-dev.fwsc")

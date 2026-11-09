@@ -552,11 +552,23 @@ def mmio_check():
     return errors
 
 
+def project_identity(path):
+    """Explicit fork identity; leave upstream release numbering unchanged."""
+    data = json.loads(Path(path).read_text())
+    product, version = data["product"], data["version"]
+    if not isinstance(product, str) or not re.fullmatch(r"FM-1_\d{3,8}", product):
+        raise ValueError("Project product must be FM-1_ followed by 3 to 8 digits")
+    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?", version):
+        raise ValueError("Project version must be X.Y.Z with an optional suffix")
+    return product, "v" + version
+
+
 def main():
     global PRODUCT, VERSION
     ap = argparse.ArgumentParser()
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--nightly", action="store_true", help="development package from the current Git commit")
+    mode.add_argument("--project", type=Path, help="fork product/version JSON manifest (separate identity namespace)")
     mode.add_argument("--release", metavar="X.Y[.Z]", help="release build: identity FM-1_9XY[Z], version string vX.Y[.Z]")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     ap.add_argument("--cpu-manifest", type=Path, help="Write source/package identity for CPU experiments")
@@ -592,6 +604,11 @@ def main():
         revision = subprocess.check_output(["git", "rev-parse", "--short=7", "HEAD"], cwd=SRC, text=True).strip()
         VERSION = "next-" + revision
         name = f"melodee-nightly.fwsc"
+    if a.project:
+        try:
+            PRODUCT, VERSION = project_identity(a.project)
+        except (ValueError, KeyError, TypeError) as error:
+            raise SystemExit(f"Invalid project identity: {error}") from error
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:

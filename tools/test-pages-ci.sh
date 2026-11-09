@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 node tools/emu-controls-test.cjs
+python3 tools/test-hub-metadata.py
 sh tools/build-melodee.sh game-test
 sh tools/build-melodee.sh ui-test
 sh tools/build-melodee.sh input-test

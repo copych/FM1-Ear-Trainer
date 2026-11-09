@@ -28,7 +28,8 @@ or a standalone executable. Establish and verify your own recovery route first.
 Web MIDI installation requires a supported Chrome/Edge browser, USB MIDI/SysEx
 permission and a physical connection. Page viewing does not write a device.
 
-Packages retain FM-1_900 development identity. Attestation proves build/source
+Packages use the dedicated identity from `project.json` (currently FM-1_327008).
+Earlier development packages used FM-1_900. Attestation proves build/source
 provenance, not hardware safety. Both physical revisions, worst-case real-time
 headroom and recovery remain UNVERIFIED. Existing native/WASM validation still
 does not replace device tests. No new firmware/DSP code is introduced by Pages.

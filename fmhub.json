@@ -1,0 +1,10 @@
+{
+  "what": "An ear-training game for the FM-1. Listen to major or minor exercises, then reproduce 1–4 hidden notes. Includes adjustable hints, sustained FM playback, scoring and extra practice for missed scale degrees.",
+  "author": "copych",
+  "kinds": ["other"],
+  "play": "https://copych.github.io/FM1-Ear-Trainer/emu/",
+  "editor": "https://copych.github.io/FM1-Ear-Trainer/webapp/editor/",
+  "cheat": "https://copych.github.io/FM1-Ear-Trainer/webapp/manual/",
+  "image": "docs/card.png",
+  "color": "#FF9877"
+}

@@ -73,11 +73,14 @@ def product_of(raw):
     return "".join(chr((m - i - 1) & 0xFF) for i in range(BLOCKS) if (m := raw[i * BLK + KEEP]) != 0x7D)
 
 
-def check_package(pkg):
+def check_package(pkg, expected_product=None):
     """the package's bytes and identity; refuses anything that is not a Melodee package"""
     raw = pkg.read_bytes()
     product = product_of(raw)
-    if not re.fullmatch(r"FM-1_9\d{2,4}", product):
+    if expected_product is not None:
+        if not re.fullmatch(r"FM-1_\d{3,8}", expected_product) or product != expected_product:
+            raise SystemExit(f"{pkg}: identity {product!r} does not match explicit project identity {expected_product!r}")
+    elif not re.fullmatch(r"FM-1_9\d{2,4}", product):
         raise SystemExit(f"{pkg}: identity {product!r} is not a Melodee package (FM-1_9 and two to four digits)")
     if b"FELUCCA-LOADER-1" not in raw:              # Melodee loader marker: never publish a package with vendor files
         raise SystemExit(f"{pkg}: no Melodee loader in it; the site ships only fm1pkg_make.py packages "
@@ -128,7 +131,7 @@ def channel(spec, label, stem, branch):
                    "sha256": {"dual": hashlib.sha256(data).hexdigest()}}
 
 
-def release_history(out, current):
+def release_history(out, current, expected_product=None):
     """Offer validated stable dual-core packages, including historical releases."""
     releases = {current["version"]: current}
     fw = Path(out) / "firmware"
@@ -137,7 +140,7 @@ def release_history(out, current):
         if not match or int(match[1].split(".")[0]) < 1 or match[1] == current["version"]:
             continue
         version = match[1]
-        raw, product = check_package(dual)
+        raw, product = check_package(dual, expected_product)
         releases[version] = {"version": version, "product": product,
                              "pkg": {"dual": "../../firmware/" + dual.name},
                              "sha256": {"dual": hashlib.sha256(raw).hexdigest()}}
@@ -207,9 +210,9 @@ def publish_resources(source, published):
             return
 
 
-def main(pkg, version, out, nightly=None, installer_only=False, rc=None, manual=None):
+def main(pkg, version, out, nightly=None, installer_only=False, rc=None, manual=None, expected_product=None):
     pkg, out = Path(pkg), Path(out)
-    raw, product = check_package(pkg)
+    raw, product = check_package(pkg, expected_product)
     if nightly is None:
         nightly = published(out, "nightly")
     nightly_files, nightly_meta = channel(nightly, "nightly", "melodee-nightly", "nightly") if nightly else ({}, None)
@@ -227,7 +230,7 @@ def main(pkg, version, out, nightly=None, installer_only=False, rc=None, manual=
     release_meta = {"version": version, "product": product,
                     "pkg": {"dual": "../../firmware/" + name},
                     "sha256": {"dual": hashlib.sha256(raw).hexdigest()}}
-    releases = release_history(out, release_meta)
+    releases = release_history(out, release_meta, expected_product)
     boot_files = mboot.checked_files()
     meta = json.dumps({**release_meta, "nightly": nightly_meta, "rc": rc_meta, "releases": releases, "boot": mboot.metadata()})
     for mark in ("/*LIB*/", "/*META*/{}", "/*INSTALLER_STYLE*/", "/*INSTALLER*/"):

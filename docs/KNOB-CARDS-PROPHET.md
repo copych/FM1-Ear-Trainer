@@ -72,3 +72,14 @@ explicit settings migration before future factory-bank changes can shift IDs.
 Real-browser check also passed: existing A-minor/2-of-2/275 ms/BELL preferences
 restore under the new layout, then PRESETS crosses to the first Prophet factory
 program and the footer shows PROPHET, POLY and the correct program name.
+
+## 0.0.13 footer refinement
+
+The footer now shows only the patch name, using the full 224-pixel content
+width and vertically centred large type. Long names fall back through the
+existing text/label sizes. Engine and constant POLY labels are removed. Native
+game/preset regressions PASS; FM6 and Prophet screen captures checked. This is
+main-loop rendering only: audio/numerics, ownership, storage/schema, dependencies,
+licences and package/recovery contracts are unchanged (source review PASS).
+Publication requires the normal target/host/WASM/attestation gates. Hardware
+timing remains UNVERIFIED. The Hub card is refreshed from the native screen.

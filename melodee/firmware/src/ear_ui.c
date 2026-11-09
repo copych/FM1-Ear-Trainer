@@ -197,9 +197,9 @@ static void ear_ui_draw(void)
         } else if(band==4) {
             uint32_t engine=ear_preset_engine(ear_settings.preset),preset=ear_preset_index(ear_settings.preset);
             const preset_t *patch=eng_preset(ENGINES[engine],preset);
-            cv_text(8,1,TY_LB,engine==ENGI_FM6?"FM6":"PROPHET",dim);
-            cv_text_r(232,1,TY_LB,"POLY",dim,bg);
-            cv_free_text(8,23,ty_fit(TY_TX,patch->name,224),patch->name,ink,bg,224);
+            const aafont_t *font=TY_VL;
+            if(text_w(font,patch->name)>224)font=ty_fit(TY_TX,patch->name,224);
+            cv_free_text(8,ty_y(24,font),font,patch->name,ink,bg,224);
         }
         cv_blit(0,band*48u);
     }

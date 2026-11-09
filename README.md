@@ -2,7 +2,7 @@
 
 An ear-training game for the M-VAVE FM-1, built on [Melodee](https://github.com/keremimo/melodee) and its existing FM6 and Prophet synthesizers. Listen, then reproduce the hidden notes using the built-in keyboard or supported MIDI input.
 
-## Current prototype — 0.0.12
+## Current prototype — 0.0.13
 
 - C major and A natural minor exercises with 1–4 distinct pitches within one octave or across the full F3–G5 keyboard range.
 - Choose how many ending notes to hide; reproduce them in order, releasing keys between entries. With every note hidden, the starting pitch changes each question.

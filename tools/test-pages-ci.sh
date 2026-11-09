@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+node tools/emu-controls-test.cjs
 sh tools/build-melodee.sh game-test
 sh tools/build-melodee.sh ui-test
 sh tools/build-melodee.sh input-test

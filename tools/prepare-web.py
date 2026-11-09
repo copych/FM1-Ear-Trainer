@@ -73,6 +73,7 @@ controls = '''
 const EarAction = { START:0, RETRY:1, NEXT:2, EXIT:3 };
 function earAction(action) {
   if (!node) return;
+  releaseAll();
   $("status").textContent = "";
   node.port.postMessage({type:"ear", action});
 }

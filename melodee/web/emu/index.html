@@ -1,5 +1,6 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 Kerem Kilic (Ellic Studio)
      Melodee in the browser (web/emu): the firmware's UI and sound as WebAssembly, on a drawn FM-1.
      web/emu/build.sh fills in the version. -->
 <html lang="en">
@@ -31,6 +32,7 @@
   .btn { background: var(--btn); border-radius: 9px; box-shadow: inset 0 0 0 1.5px #4a4d52; color: var(--label); font-size: 1.4cqw;
          font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: none; }
   .btn.held { filter: brightness(1.5); }
+  .btn.latched { outline: .3cqw solid #6bc7ff; outline-offset: .3cqw; }
   .btn.lit { color: #1a1206; background: var(--lit); box-shadow: 0 0 1.4cqw var(--lit); }
   .key { border-radius: 999px; background: var(--key-w); cursor: pointer; touch-action: none; display: flex; align-items: flex-end;
          justify-content: center; padding-bottom: .8cqw; color: #55575c; font-size: 1.3cqw; font-weight: 600; box-sizing: border-box; }
@@ -49,6 +51,13 @@
   <p>Melodee @VERSION@'s UI and sound, as WebAssembly, on a drawn FM-1: the same code the FM-1 runs. Mouse, touch,
     or the computer keyboard (the letters on the keys). Nothing is saved; there is no USB.
     <a href="../webapp/installer/">Install it on your FM-1</a>.</p>
+  <div class="bar">
+    <button id="holdhome" disabled aria-pressed="false">Hold HOME</button>
+    <button id="releaseheld" disabled>Release held controls</button>
+    <span id="holdstatus" class="small" role="status"></span>
+  </div>
+  <p class="small">Button combinations: click Hold HOME, then another panel button. Or Shift+click any panel button to hold it.
+    A held button has a blue outline. The next button/key release clears the hold. Escape or leaving the window releases everything.</p>
   <div class="device" id="device">
     <div class="poweron" id="poweron"><button id="power">Switch on</button></div>
   </div>
@@ -129,13 +138,33 @@ for (const [code, k] of Object.entries(TRACKER)) keys[k].textContent += (keys[k]
 let node = null;
 const send = (m) => node && node.port.postMessage(m);
 const heldKeys = new Map(), heldBtns = new Map();
+const latchedBtns = new Set();
+let latchReleaseTimer = null;
+function cancelLatchRelease() {
+  if (latchReleaseTimer !== null) clearTimeout(latchReleaseTimer);
+  latchReleaseTimer = null;
+}
+function consumeLatch() {
+  if (!latchedBtns.size) return;
+  cancelLatchRelease();
+  /* The worklet must observe the modifier with the queued press before release. */
+  latchReleaseTimer = setTimeout(() => { latchReleaseTimer=null;latchedBtns.clear();sync(); }, 60);
+}
 let keyMask = 0, btnMask = 0;
 function sync() {
   let k = 0, b = 0;
   for (const v of heldKeys.values()) k |= 1 << v;
   for (const v of heldBtns.values()) b |= 1 << v;
+  for (const v of latchedBtns) b |= 1 << v;
   keys.forEach((el, i) => el.classList.toggle("held", !!(k & (1 << i))));
   buttons.forEach((el, i) => el.classList.toggle("held", !!(b & (1 << i))));
+  buttons.forEach((el, i) => {
+    el.classList.toggle("latched", latchedBtns.has(i));
+    el.setAttribute("aria-pressed", String(!!(b & (1 << i))));
+  });
+  $("holdhome").setAttribute("aria-pressed", String(latchedBtns.has(BTN.HOME)));
+  $("holdhome").textContent = latchedBtns.has(BTN.HOME) ? "Release HOME" : "Hold HOME";
+  $("holdstatus").textContent = latchedBtns.size ? "Held: " + [...latchedBtns].map(i => buttons[i].textContent).join(" + ") : "";
   if (k !== keyMask) send({ type: "keys", mask: (keyMask = k) });
   if (b !== btnMask) send({ type: "buttons", mask: (btnMask = b) });
 }
@@ -143,6 +172,11 @@ function hold(el, map, v) {
   el.addEventListener("contextmenu", (e) => e.preventDefault());
   el.addEventListener("pointerdown", (e) => {
     e.preventDefault();
+    cancelLatchRelease();
+    if (map === heldBtns && (e.shiftKey || latchedBtns.has(v))) {
+      if (latchedBtns.has(v)) latchedBtns.delete(v); else latchedBtns.add(v);
+      sync();return;
+    }
     el.setPointerCapture(e.pointerId);
     map.set("p" + e.pointerId, v);
     sync();
@@ -151,7 +185,19 @@ function hold(el, map, v) {
 keys.forEach((el, i) => hold(el, heldKeys, i));
 buttons.forEach((el, i) => hold(el, heldBtns, i));
 for (const ev of ["pointerup", "pointercancel", "lostpointercapture"])
-  device.addEventListener(ev, (e) => { if (heldKeys.delete("p" + e.pointerId) | heldBtns.delete("p" + e.pointerId)) sync(); }, true);
+  device.addEventListener(ev, (e) => {
+    if (ev === "pointercancel") { releaseAll();return; }
+    if (heldKeys.delete("p" + e.pointerId) | heldBtns.delete("p" + e.pointerId)) {
+      sync();consumeLatch();
+    }
+  }, true);
+function releaseAll() { cancelLatchRelease();heldKeys.clear();heldBtns.clear();latchedBtns.clear();sync(); }
+$("holdhome").addEventListener("click", () => {
+  cancelLatchRelease();
+  if (latchedBtns.has(BTN.HOME)) latchedBtns.delete(BTN.HOME); else latchedBtns.add(BTN.HOME);
+  sync();
+});
+$("releaseheld").addEventListener("click", releaseAll);
 
 function turn(k, n) {
   if (!n) return;
@@ -190,16 +236,18 @@ for (const k of knobs) {
   });
 }
 function onKey(e, down) {
+  if (e.code === "Escape") { e.preventDefault();releaseAll();return; }
   const k = TRACKER[e.code];
   if (k === undefined || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("select, [role=slider]")) return;
   e.preventDefault();
   if (e.repeat) return;
-  if (down) heldKeys.set(e.code, k); else heldKeys.delete(e.code);
+  if (down) { cancelLatchRelease();heldKeys.set(e.code, k); } else heldKeys.delete(e.code);
   sync();
+  if (!down) consumeLatch();
 }
 addEventListener("keydown", (e) => onKey(e, true));
 addEventListener("keyup", (e) => onKey(e, false));
-addEventListener("blur", () => { heldKeys.clear(); heldBtns.clear(); sync(); });
+addEventListener("blur", releaseAll);
 
 /* ---- the device */
 const ctx = screen.getContext("2d"), img = ctx.createImageData(240, 240);
@@ -225,6 +273,7 @@ $("power").addEventListener("click", async () => {
     node.port.onmessage = (e) => {
       const m = e.data;
       if (m.type === "crash") { $("status").textContent = "Stopped: " + m.message; return; }
+      if (m.type === "frame") { $("holdhome").disabled=false;$("releaseheld").disabled=false; }
       if (m.fb) draw(m.fb);
       keys.forEach((el, i) => el.classList.toggle("lit", !!(m.keys & (1 << i))));
       buttons.forEach((el, i) => el.classList.toggle("lit", !!(m.buttons & (1 << i))));

@@ -30,8 +30,11 @@ static int defaults(void)
         !memcmp(&panel, &PANEL_DEFAULT, sizeof panel) && !template_used() && !template_old();
     for (uint32_t k = 0; k < 4u; k++) ok &= settings_glo[k] == GP[GLO_KEPT[k]].def;
     for (uint32_t i = 0; i < sizeof favorites; i++)
-        if (i < 60u || i >= 64u) ok &= !((const uint8_t *)&favorites)[i]; /* owner tag isn't a preference */
-    return ok && !favorites_user_hi;
+        if ((i < 60u || i >= 64u) && (i < 40u || i >= 52u))
+            ok &= !((const uint8_t *)&favorites)[i]; /* owner/EAR records aren't preset favorites */
+    return ok && !favorites_user_hi && ear_settings.scale==EAR_MAJOR &&
+        ear_settings.range==EAR_RANGE_OCTAVE && ear_settings.count==2 && ear_settings.guess==1 &&
+        ear_settings.gap==250 && !ear_settings.preset;
 }
 static void stale_ram(void)
 {

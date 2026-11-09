@@ -105,6 +105,19 @@ EXPORT(web_ear_action) uint32_t web_ear_action(uint32_t action)
     return 1;
 }
 EXPORT(web_ear_active) uint32_t web_ear_active(void) { return ear_enabled; }
+/* Same checked record as the device settings. The page owns browser storage;
+ * no flash/localStorage operation runs inside the emulated firmware. */
+static uint8_t web_ear_prefs[EAR_SETTINGS_BYTES];
+EXPORT(web_ear_settings) uint8_t *web_ear_settings(void)
+{
+    ear_settings_pack(web_ear_prefs);return web_ear_prefs;
+}
+EXPORT(web_ear_settings_restore) uint32_t web_ear_settings_restore(void)
+{
+    ear_settings_t next;
+    if(ear_enabled || !ear_settings_unpack(&next,web_ear_prefs,sizeof web_ear_prefs)) return 0;
+    ear_settings=next;return 1;
+}
 
 /* the clock and the sound: stereo float into a ring, drained by web_render */
 #define RING 4096u

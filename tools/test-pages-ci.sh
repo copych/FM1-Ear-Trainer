@@ -6,6 +6,7 @@ python3 tools/test-hub-metadata.py
 sh tools/build-melodee.sh game-test
 sh tools/build-melodee.sh ui-test
 sh tools/build-melodee.sh input-test
+sh tools/build-melodee.sh settings-test
 sh tools/build-melodee.sh web-test
 python3 melodee/tools/fm1_recover.py melodee/build/melodee.fwsc --check
 node tools/serve-site.cjs 8011 /FM1-Ear-Trainer/ > build/pages-server.log 2>&1 &

@@ -34,6 +34,9 @@ static uint32_t erases, preset_reads;
 static int st_read(uint32_t off, void *dst, uint32_t n) { preset_reads++; memcpy(dst, nor + off, n); return 0; }
 static int st_erase(uint32_t off)
 {
+#ifdef PERSIST_ERASE_HOOK
+    PERSIST_ERASE_HOOK();
+#endif
     erases++;
     if (boot_trace && (!boot_syncs || boot_work.state != 1u || boot_work.done >= boot_work.total)) boot_trace_bad++;
     if (erase_error) return -8;

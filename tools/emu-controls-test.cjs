@@ -58,3 +58,22 @@ ids.get('holdhome').fire('click');panel('PLAY').fire('pointerdown',{pointerId:10
 ids.get('holdhome').fire('click');ids.get('holdhome').fire('click');flushTimers();assert.equal(mask(),home);
 ids.get('releaseheld').fire('click');assert.equal(mask(),0);
 console.log('Emulator controls PASS: two-click HOME+PLAY, Shift latches, ordinary taps, toggles, release, Escape, blur and pointer cancellation');
+
+// The real page stores/reloads the preference record; denied storage stays usable.
+const browserStorage=new Map();
+context.localStorage={getItem:key=>browserStorage.get(key)??null,setItem:(key,value)=>browserStorage.set(key,value)};
+vm.runInContext('storeEarSettings(Array.from({length:12},(_,k)=>k))',context);
+assert.equal(vm.runInContext('JSON.stringify(readEarSettings())',context),JSON.stringify(Array.from({length:12},(_,k)=>k)));
+const reloaded=vm.runInNewContext(script+'\nJSON.stringify(readEarSettings())',{
+  console,navigator:{},document:context.document,localStorage:context.localStorage,
+  addEventListener(){},setTimeout(){},clearTimeout(){},
+});
+assert.equal(reloaded,JSON.stringify(Array.from({length:12},(_,k)=>k)));
+browserStorage.set('fm1-ear-trainer.settings.v1','broken JSON');
+assert.equal(vm.runInContext('readEarSettings()',context),null);
+browserStorage.set('fm1-ear-trainer.settings.v1','[1,2]');
+assert.equal(vm.runInContext('readEarSettings()',context),null);
+context.localStorage={getItem(){throw Error('denied');},setItem(){throw Error('denied');}};
+assert.equal(vm.runInContext('readEarSettings()',context),null);
+vm.runInContext('storeEarSettings([])',context);
+console.log('Browser preferences PASS: real page save/reload, invalid JSON/length and unavailable storage');

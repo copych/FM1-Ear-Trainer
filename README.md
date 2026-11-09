@@ -2,14 +2,14 @@
 
 An ear-training game for the M-VAVE FM-1, built on [Melodee](https://github.com/keremimo/melodee) and its existing FM6 synthesizer. Listen, then reproduce the hidden notes using the built-in keyboard or supported MIDI input.
 
-## Current prototype — 0.0.10
+## Current prototype — 0.0.11
 
 - C major and A natural minor exercises with 1–4 distinct pitches within one octave or across the full F3–G5 keyboard range.
 - Choose how many ending notes to hide; reproduce them in order, releasing keys between entries. With every note hidden, the starting pitch changes each question.
 - Select any of 24 factory FM6 presets, always polyphonic; default TINE EP, with overlapping notes and adjustable onset spacing (zero plays a simultaneous chord).
 - Known notes highlight on the display and keyboard. Hidden notes never light a key during playback.
 - Green/red feedback, automatic next question after success and same-question replay after mistakes. Extra musical keys are blocked during playback/feedback.
-- Attempt/replay scoring and adaptive weighting toward missed degrees. Settings, scores and practice history reset on restart.
+- Attempt/replay scoring and adaptive weighting toward missed degrees. Scale, complexity/range, spacing and preset save automatically; scores and practice history reset on restart.
 - Browser emulator and locally generated web installer.
 
 ## Controls
@@ -20,13 +20,16 @@ With transport stopped, hold **HOME** and tap **PLAY** to enter training.
 | --- | --- |
 | K1 | C major / A natural minor |
 | K2 | Complexity: hidden notes of total notes, e.g. 1 OF 3; octave block then full-keyboard block; default 1 OF 2 OCT |
-| K3 | Factory FM6 preset; always poly mode |
+| PRESETS | Factory FM6 preset; always poly mode |
+| K3 | Reserved |
 | K4 | Time between note starts: 0–1000 ms, in 25 ms steps |
 | PLAY | Replay / retry |
 | REC | Next question |
 | HOME | Exit training |
 
-K2 steps through 1 of 1, 1 of 2, 2 of 2, 1 of 3, 2 of 3, 3 of 3, 1 of 4, 2 of 4, 3 of 4, and 4 of 4 within OCT (C4–C5 / A3–A4), then repeats the combinations in FULL (F3–G5). Changing scale, complexity or spacing starts a fresh question; changing preset replays the current question. The built-in keys use a fixed F3–G5 layout. Matching includes octave. All notes release one second after the last onset; the original TINE EP's natural decay remains.
+K2 steps through 1 of 1, 1 of 2, 2 of 2, 1 of 3, 2 of 3, 3 of 3, 1 of 4, 2 of 4, 3 of 4, and 4 of 4 within OCT (C4–C5 / A3–A4), then repeats the combinations in FULL (F3–G5). Changing scale, complexity or spacing starts a fresh question; turning PRESETS replays the current question with the selected sound. The built-in keys use a fixed F3–G5 layout. Matching includes octave. All notes release one second after the last onset; the original TINE EP's natural decay remains.
+
+Preferences save to the device during a quiet answer pause (after a one-second edit debounce) or after exiting training. The emulator remembers them in browser storage.
 
 Entering training replaces track 1's in-memory sound with the selected training preset and temporarily mutes other parts. Track 1 retains that sound on exit. Avoid saving over a project whose previous track-1 sound you need.
 
@@ -42,7 +45,7 @@ For local use after building the site, run `node tools/serve-site.cjs 8010` (or 
 
 ## Validation and limits
 
-Native/WASM game tests, target builds and package/hash checks have passed. See the [latest validation/compliance report](docs/RANGES-PRESETS.md) and [sound/polyphony report](docs/ORIGINAL-PRESET-POLYPHONY.md).
+Native/WASM game tests, target builds and package/hash checks have passed. See the [latest validation/compliance report](docs/SAVED-SETTINGS.md) and [sound/polyphony report](docs/ORIGINAL-PRESET-POLYPHONY.md).
 
 Both known flash IDs pass software checks. Physical hardware revisions, worst-case audio timing, runtime headroom and recovery are not yet qualified. Back up your unit and establish its recovery route before installing firmware.
 

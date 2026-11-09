@@ -59,11 +59,13 @@ static int ear_ui_input(uint32_t pressed)
     uint32_t home=1u<<panel.btn[B_HOME], play=1u<<panel.btn[B_PLAY];
     if((pressed&play) && (fm1_in.buttons&home)) return ear_ui_start();
     if(!ear_enabled) return 0;
-    /* Consume controls while active; K3 alone may load an FM6 factory sound. */
+    /* The printed PRESETS knob owns sound selection; K3 remains available. */
     int32_t delta[4];
     for(uint32_t k=0;k<4u;k++) delta[k]=panel_enc(EN_K1+k);
+    delta[2]=panel_enc(EN_PRESET);
     for(uint32_t k=0;k<NE;k++) (void)panel_enc(k);
     if(delta[0] || delta[1] || delta[2] || delta[3]) {
+        ear_settings_t before=ear_settings;
         uint32_t sound_changed, cmd;
         fm1_irq_off();
         int32_t value=(int32_t)ear_settings.scale+delta[0];
@@ -85,6 +87,11 @@ static int ear_ui_input(uint32_t pressed)
         else if(delta[0] || delta[1] || delta[3]) ear_request=(uint8_t)cmd;
         fm1_irq_on();ui.force=1;
         if(sound_changed) ear_ui_load_preset(cmd);
+        if(before.scale!=ear_settings.scale || before.count!=ear_settings.count ||
+           before.guess!=ear_settings.guess || before.range!=ear_settings.range ||
+           before.gap!=ear_settings.gap || before.preset!=ear_settings.preset) {
+            ear_settings_ms=fm1_ms;settings_save();
+        }
     }
     if(pressed&home) {
         ear_publish(EAR_CMD_EXIT);
@@ -127,7 +134,7 @@ static void ear_ui_draw(void)
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,bg);
         if(band==0) {
-            cv_text(10,0,TY_LB,"EAR TRAINER",accent);
+            cv_text(10,0,TY_LB,ear_saving?"SAVING SETTINGS":"EAR TRAINER",accent);
             char stats[32]="PTS ";fmt_int(stats+4,(int32_t)score);
             uint32_t at=str_len(stats);str_cpy(stats+at," S",3);fmt_int(stats+at+2,(int32_t)streak);
             cv_text(10,25,TY_LB,stats,dim);
@@ -166,7 +173,7 @@ static void ear_ui_draw(void)
             uint32_t pos=str_len(label);str_cpy(label+pos," OF ",5);fmt_int(label+pos+4,(int32_t)count);
             pos=str_len(label);str_cpy(label+pos,range==EAR_RANGE_FULL?" FULL":" OCT",6);
             cv_text(10,16,TY_LB,label,text);
-            str_cpy(label,"K3 ",4);str_cpy(label+3,FM6_PRESETS[ear_settings.preset].name,sizeof label-3u);
+            str_cpy(label,"PRE ",5);str_cpy(label+4,FM6_PRESETS[ear_settings.preset].name,sizeof label-4u);
             cv_text(10,32,TY_LB,label,text);
             str_cpy(label,"K4 ",4);fmt_int(label+3,(int32_t)gap);uint32_t at=str_len(label);str_cpy(label+at,"ms",3);
             cv_text(140,0,TY_LB,label,text);

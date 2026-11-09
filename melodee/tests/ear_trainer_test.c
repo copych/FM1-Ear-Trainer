@@ -245,12 +245,16 @@ int main(void)
     ear.guess=ear.count;assert(!ear_ui_key_lights());
     ear_publish(EAR_CMD_EXIT);audio_ms(10);assert(!ear.sounding && ear.playing==-1);
     for(uint32_t k=0;k<NVOICE;k++) assert(!trk[0].v[k].gate);
+    /* K3 is consumed without changing sound or restarting a question. */
+    ear_request=EAR_CMD_NONE;
+    host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0);
+    assert(!ear_request && !ear_settings.preset);
     /* Preset browsing during held playback replays the same question in poly. */
     ear_settings.count=4;ear_settings.guess=1;ear_settings.range=EAR_RANGE_OCTAVE;
     assert(ear_ui_start());audio_ms(260);
     serial=ear.serial;uint8_t question[4];memcpy(question,ear.notes,sizeof question);
     for(uint32_t preset=0;preset<FM6_NFAC;preset++) {
-        if(preset) { host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0); }
+        if(preset) { host_enc[panel.enc[EN_PRESET]]=panel.dir[EN_PRESET];ear_ui_input(0); }
         assert(ear_settings.preset==preset && trk[0].preset==preset && trk[0].p[P_VOICE]==V_POLY);
         for(uint32_t k=0;k<FX_SLOTS;k++) assert(!trk[0].p[P_FXSEND+k]);
         audio_ms(260);assert(ear.serial==serial && !memcmp(question,ear.notes,sizeof question));
@@ -259,7 +263,7 @@ int main(void)
         assert(gates==4u);
         if(preset==2u)save_screen("ear-poly-bass",T_BG);
     }
-    host_enc[panel.enc[EN_K3]]=99*panel.dir[EN_K3];ear_ui_input(0);
+    host_enc[panel.enc[EN_PRESET]]=99*panel.dir[EN_PRESET];ear_ui_input(0);
     assert(ear_settings.preset==FM6_NFAC-1u);
     /* While main publishes a preset, neither generated nor player notes start. */
     ear_loading=1;ear.state=EAR_ANSWER;ear.armed=1;
@@ -267,14 +271,14 @@ int main(void)
     ear_audio_tick(1);assert(!ear.sounding && !ear.armed);
     ear_loading=0;ear_publish(EAR_CMD_REPEAT);audio_ms(1400);assert(ear.state==EAR_ANSWER);
     for(int preset=FM6_NFAC-2;preset>=0;preset--) {
-        host_enc[panel.enc[EN_K3]]=-panel.dir[EN_K3];ear_ui_input(0);audio_ms(10);
+        host_enc[panel.enc[EN_PRESET]]=-panel.dir[EN_PRESET];ear_ui_input(0);audio_ms(10);
         assert(ear_settings.preset==preset && trk[0].p[P_VOICE]==V_POLY);
     }
-    host_enc[panel.enc[EN_K3]]=-99*panel.dir[EN_K3];ear_ui_input(0);
+    host_enc[panel.enc[EN_PRESET]]=-99*panel.dir[EN_PRESET];ear_ui_input(0);
     assert(!ear_settings.preset);
     /* A sound change after success advances, so it cannot award a question twice. */
     ear.state=EAR_CORRECT;serial=ear.serial;
-    host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0);audio_ms(10);
+    host_enc[panel.enc[EN_PRESET]]=panel.dir[EN_PRESET];ear_ui_input(0);audio_ms(10);
     assert(ear.serial==serial+1u);
     ear_publish(EAR_CMD_EXIT);audio_ms(10);assert(!ear.sounding);
     assert(ear_ui_start());audio_ms(10);assert(trk[0].preset==1 && trk[0].p[P_VOICE]==V_POLY);

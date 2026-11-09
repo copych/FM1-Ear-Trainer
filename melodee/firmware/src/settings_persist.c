@@ -46,6 +46,11 @@ static int16_t settings_glo[4];                     /* ext.glo: project.c GLO_KE
 /* Retired DIGITAL row bytes 20..23: 'M', 'K', profile, encoder mode.
  * Untagged/unknown records keep panel MIDI OFF and the PER5 layout unchanged. */
 #define MIDI_KNOB_PREF_BYTE 20u
+/* Ear Trainer: retired DIGITAL row bytes 8..19, outside current settings and
+ * the first 64 legacy favorite bits. Versioned 12-byte EAR record with CRC8.
+ * Builds without the game preserve these bytes unchanged. PER5 stays 604 B. */
+#define EAR_PREF_ROW 1u
+#define EAR_PREF_BYTE 8u
 /* Retired GRAIN row bytes 4..7 (past Felucca 1.0's stars in bits 0..11): 'U', 'V', version 1, USB VOLUME 0..100 %.
  * Untagged records take UA_VOLUME_DEFAULT. */
 #define USB_VOLUME_ROW 8u
@@ -134,6 +139,13 @@ static int settings_import(persist_t *p, int n)
     favorites.filter = favorites.filter == 1u;
 #endif
     panel = p->panel.magic == PANEL_MAGIC ? p->panel : PANEL_DEFAULT;
+#ifdef MELODEE_EAR_TRAINER
+    {
+        ear_settings_t next={250,EAR_MAJOR,2,1,EAR_RANGE_OCTAVE,0};
+        (void)ear_settings_unpack(&next,p->favorites.factory[EAR_PREF_ROW]+EAR_PREF_BYTE,EAR_SETTINGS_BYTES);
+        fm1_irq_off();ear_settings=next;fm1_irq_on();
+    }
+#endif
     {
         const uint8_t *w = p->favorites.factory[VOICE_PREF_ROW] + VOICE_PREF_BYTE;
         uint32_t tagged = w[0] == 'W' && w[1] == 1u;
@@ -206,4 +218,7 @@ static void settings_export(persist_t *p)
                 w[2u + k] = (uint8_t)settings_vpoints[k];
         }
     }
+#ifdef MELODEE_EAR_TRAINER
+    ear_settings_pack(p->favorites.factory[EAR_PREF_ROW]+EAR_PREF_BYTE);
+#endif
 }

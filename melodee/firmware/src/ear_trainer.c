@@ -14,10 +14,43 @@ enum eEarScale { EAR_MAJOR, EAR_MINOR, EAR_SCALES_COUNT };
 enum eEarRange { EAR_RANGE_OCTAVE, EAR_RANGE_FULL, EAR_RANGES_COUNT };
 static const uint8_t ear_minor_intervals[EAR_DEGREES_COUNT]={2,3,5,7,8,10,12};
 /* Main publishes settings and NEXT atomically under the existing IRQ mask. */
-static struct { uint16_t gap; uint8_t scale, count, guess, range, preset; }
-    ear_settings={250,EAR_MAJOR,2,1,EAR_RANGE_OCTAVE,0};
+typedef struct { uint16_t gap; uint8_t scale, count, guess, range, preset; } ear_settings_t;
+static ear_settings_t ear_settings={250,EAR_MAJOR,2,1,EAR_RANGE_OCTAVE,0};
+#define MELODEE_EAR_TRAINER 1
+#define EAR_SETTINGS_BYTES 12u
+/* Main-only codec: explicit wire IDs/little endian, never compiler enum layout. */
+static uint8_t ear_settings_crc(const uint8_t *p)
+{
+    uint32_t crc=0;
+    for(uint32_t k=0;k<EAR_SETTINGS_BYTES-1u;k++) {
+        crc^=p[k];
+        for(uint32_t bit=0;bit<8u;bit++) crc=((crc<<1)^((crc&128u)?7u:0u))&255u;
+    }
+    return (uint8_t)crc;
+}
+static void ear_settings_pack(uint8_t *p)
+{
+    p[0]='E';p[1]='A';p[2]='R';p[3]=1;
+    p[4]=ear_settings.scale==EAR_MINOR?1u:0u;
+    p[5]=ear_settings.range==EAR_RANGE_FULL?1u:0u;
+    p[6]=ear_settings.count;p[7]=ear_settings.guess;p[8]=ear_settings.preset;
+    p[9]=(uint8_t)ear_settings.gap;p[10]=(uint8_t)(ear_settings.gap>>8);
+    p[11]=ear_settings_crc(p);
+}
+static int ear_settings_unpack(ear_settings_t *out,const uint8_t *p,uint32_t n)
+{
+    if(n!=EAR_SETTINGS_BYTES || p[0]!='E' || p[1]!='A' || p[2]!='R' || p[3]!=1u ||
+       p[11]!=ear_settings_crc(p) || p[4]>1u || p[5]>1u ||
+       p[6]<1u || p[6]>4u || p[7]<1u || p[7]>p[6] || p[8]>=FM6_NFAC) return 0;
+    uint32_t gap=p[9]|((uint32_t)p[10]<<8);
+    if(gap>1000u || gap%25u) return 0;
+    out->scale=p[4]?EAR_MINOR:EAR_MAJOR;out->range=p[5]?EAR_RANGE_FULL:EAR_RANGE_OCTAVE;
+    out->count=p[6];out->guess=p[7];out->preset=p[8];out->gap=(uint16_t)gap;
+    return 1;
+}
+static uint32_t ear_settings_ms; /* main: debounce settings writes */
 /* Main brackets preset publication; audio/input cannot start notes mid-load. */
-static volatile uint8_t ear_enabled, ear_request, ear_loading;
+static volatile uint8_t ear_enabled, ear_request, ear_loading, ear_saving;
 static struct {
     uint32_t left, seed, serial, attempts;
     uint32_t score, solved;
@@ -125,7 +158,7 @@ static void ear_player_stop(void)
 }
 static void ear_player_press(uint32_t note)
 {
-    if(ear_loading || ear.state!=EAR_ANSWER || !ear.armed) return;
+    if(ear_loading || ear_saving || ear.state!=EAR_ANSWER || !ear.armed) return;
     ear_player_stop();
     ear.player=(int32_t)note;
     trk_note_on(&trk[0],note,100u);
@@ -175,6 +208,7 @@ static void ear_source_lost(uint32_t source)
 }
 static void ear_audio_tick(uint32_t n)
 {
+    if(ear_saving) return; /* Preserve the quiet answer pause during main's flash commit. */
     uint32_t cmd=ear_request;
     ear_request=EAR_CMD_NONE;
     if(cmd==EAR_CMD_EXIT) {

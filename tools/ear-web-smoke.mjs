@@ -110,8 +110,8 @@ for(let k=0;k<4;k++) {
 }
 console.log('Detected hidden pitches:',pitches);
 for(const note of pitches)assert(levelAt(note,2.1,2.3)>.003,'all four pitches must sustain');
-// K3 selects factory FM BASS (normally mono), then replays this question in poly.
-ex.web_encoder(4,2);const bassPeak=run(3000);
+// PRESETS selects factory FM BASS (normally mono), then replays this question in poly.
+ex.web_encoder(6,2);const bassPeak=run(3000);
 assert(bassPeak>.01,'selected preset must produce audio');
 assert.equal(ex.web_led_keys()>>>0,0,'changing preset must not reveal hidden notes');
 for(let k=0;k<4;k++) {
@@ -121,3 +121,21 @@ for(let k=0;k<4;k++) {
 }
 ex.web_ear_action(Action.EXIT);run(100);
 console.log(`WASM knobs passed: A minor, four sustained hidden notes, 500ms onset spacing, MIDI sequence ${pitches.join(',')}`);
+
+// Persist the checked record across a fresh emulator/WASM instance.
+const saved=Array.from(new Uint8Array(ex.memory.buffer,ex.web_ear_settings(),12));
+assert.equal(saved[8],2,'PRESETS selected FM BASS');
+const fresh=(await WebAssembly.instantiate(fs.readFileSync('build/emu/melodee.wasm'),{
+  env:stub,wasi_snapshot_preview1:stub,
+})).instance.exports;
+fresh._initialize();fresh.web_boot(1023);
+new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12).set(saved);
+assert.equal(fresh.web_ear_settings_restore(),1);
+assert.deepEqual(Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12)),saved);
+const damaged=[...saved];damaged[4]^=1;
+new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12).set(damaged);
+assert.equal(fresh.web_ear_settings_restore(),0,'damaged settings rejected without changing runtime');
+assert.deepEqual(Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12)),saved);
+fresh.web_ear_action(Action.START);
+assert.equal(fresh.web_ear_settings_restore(),0,'cannot restore settings during an active question');
+console.log('WASM settings PASS: fresh-instance restore, exact preferences, corrupt-record rejection and active-game guard');

@@ -25,7 +25,12 @@ case "${1:-target}" in
               cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src tests/flash_id_test.c -lm -o build/ear-baseline/flash_id_test
               exec build/ear-baseline/flash_id_test ;;
   web) exec sh web/emu/build.sh ;;
+  settings-test) mkdir -p build/ear-baseline
+                 for suite in ear_persistence_test settings_test persistence_test settings_origin_test; do
+                   cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src "tests/$suite.c" -lm -o "build/ear-baseline/$suite"
+                   "build/ear-baseline/$suite"
+                 done ;;
   web-test) exec sh ../tools/node-wsl.sh ../tools/ear-web-smoke.mjs ;;
   site) exec python3 ../tools/prepare-web.py ;;
-  *) echo 'usage: build-melodee.sh [target|host|ui-test|game-test|input-test|web|web-test]' >&2; exit 2 ;;
+  *) echo 'usage: build-melodee.sh [target|host|ui-test|game-test|input-test|settings-test|web|web-test]' >&2; exit 2 ;;
 esac

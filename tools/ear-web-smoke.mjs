@@ -122,9 +122,16 @@ for(let k=0;k<4;k++) {
 ex.web_ear_action(Action.EXIT);run(100);
 console.log(`WASM knobs passed: A minor, four sustained hidden notes, 500ms onset spacing, MIDI sequence ${pitches.join(',')}`);
 
+// Switch across engines: Prophet must finish fading/loading and play a new exercise.
+ex.web_ear_action(Action.START);run(20);
+ex.web_encoder(6,22);run(1000);
+assert(run(1800)>.01,'Prophet must play after the engine switch, not wait for FM6');
+assert.equal(ex.web_led_keys()>>>0,0,'all-hidden Prophet pitches stay dark');
+ex.web_ear_action(Action.EXIT);run(100);
 // Persist the checked record across a fresh emulator/WASM instance.
 const saved=Array.from(new Uint8Array(ex.memory.buffer,ex.web_ear_settings(),12));
-assert.equal(saved[8],2,'PRESETS selected FM BASS');
+assert.equal(saved[3],2,'Prophet preferences use the checked extended sound namespace');
+assert.equal(saved[8],24,'PRESETS selected the first Prophet factory program');
 const fresh=(await WebAssembly.instantiate(fs.readFileSync('build/emu/melodee.wasm'),{
   env:stub,wasi_snapshot_preview1:stub,
 })).instance.exports;

@@ -20,12 +20,12 @@ static void ear_publish(uint32_t cmd)
     ear_request=(uint8_t)cmd;
     fm1_irq_on();
 }
-/* Factory loading stays in main; the existing FM6 generation/panic publication
+/* Factory loading stays in main; the existing engine generation/panic publication
  * stops old voices. Publish poly mode and zero sends before audio resumes. */
 static void ear_ui_load_preset(uint32_t cmd)
 {
     fm1_irq_off();ear_loading=1;ear_request=EAR_CMD_NONE;fm1_irq_on();
-    engine_load_of(&trk[0],ENGI_FM6,ear_settings.preset);
+    engine_load_of(&trk[0],ear_preset_engine(ear_settings.preset),ear_preset_index(ear_settings.preset));
     fm1_irq_off();
     trk[0].p[P_VOICE]=V_POLY;
     for(uint32_t k=0;k<FX_SLOTS;k++) trk[0].p[P_FXSEND+k]=0;
@@ -80,7 +80,7 @@ static int ear_ui_input(uint32_t pressed)
         value=(int32_t)ear_settings.gap+delta[3]*25;
         ear_settings.gap=(uint16_t)(value<0?0:value>1000?1000:value);
         value=(int32_t)ear_settings.preset+delta[2];
-        uint32_t preset=(uint32_t)(value<0?0:value>=FM6_NFAC?FM6_NFAC-1:value);
+        uint32_t preset=(uint32_t)(value<0?0:value>=EAR_PRESETS_COUNT?EAR_PRESETS_COUNT-1:value);
         sound_changed=preset!=ear_settings.preset;ear_settings.preset=(uint8_t)preset;
         cmd=delta[0] || delta[1] || delta[3] || ear.state==EAR_CORRECT?EAR_CMD_NEXT:EAR_CMD_REPEAT;
         if(sound_changed) { ear_loading=1;ear_request=EAR_CMD_NONE; }
@@ -106,77 +106,100 @@ static int ear_ui_input(uint32_t pressed)
     else if(pressed&play) ear_publish(EAR_CMD_RETRY);
     return 1;
 }
+/* Dedicated game screen: four knob zones, musical cards/result, score, patch.
+ * Five 48-row tiles retain the existing bounded canvas instead of a framebuffer. */
 static void ear_ui_draw(void)
 {
-    uint32_t state, attempts, armed, score, streak, award, count, guess, entered, index, scale, gap, sounding, range;
+    uint32_t state,attempts,armed,score,streak,award,count,guess,entered,index,scale,gap,sounding,range;
     uint8_t notes[4];
-    static uint32_t last_state=EAR_STATES_COUNT, last_attempts, last_armed, last_entered,last_index;
+    static uint32_t last_state=EAR_STATES_COUNT,last_attempts,last_armed,last_entered,last_index;
     fm1_irq_off();
-    state=ear.state; attempts=ear.attempts; armed=ear.armed;
-    score=ear.score;streak=ear.streak;award=ear.last_award;
+    state=ear.state;attempts=ear.attempts;armed=ear.armed;score=ear.score;streak=ear.streak;award=ear.last_award;
     count=ear.count;guess=ear.guess;entered=ear.entered;index=ear.index;scale=ear.scale;gap=ear.gap;
-    sounding=ear.sounding;
-    range=ear.range;
-    for(uint32_t k=0;k<4u;k++) notes[k]=ear.notes[k];
+    sounding=ear.sounding;range=ear.range;
+    for(uint32_t k=0;k<4u;k++)notes[k]=ear.notes[k];
     fm1_irq_on();
-    if(!ui.force && state==last_state && attempts==last_attempts && armed==last_armed && entered==last_entered && index==last_index) return;
-    last_entered=entered;last_index=index;
-    last_state=state; last_attempts=attempts; last_armed=armed; ui.force=0;
-    const char *status=state==EAR_CORRECT?"CORRECT!":state==EAR_WRONG?"WRONG":
-        state==EAR_ANSWER?(armed?"PLAY HIDDEN NOTES":"RELEASE KEYS"):
-        state==EAR_FIRST || state==EAR_SECOND?"LISTEN":
-        state==EAR_PREPARE?"GET READY":"LISTEN";
-    /* Independent header shows persistent state; never expose target pitches. */
+    if(!ui.force && state==last_state && attempts==last_attempts && armed==last_armed &&
+        entered==last_entered && index==last_index)return;
+    last_state=state;last_attempts=attempts;last_armed=armed;last_entered=entered;last_index=index;ui.force=0;
     uint16_t bg=state==EAR_CORRECT?RGB(16,104,55):state==EAR_WRONG?RGB(148,32,42):T_BG;
-    uint16_t text=(state==EAR_CORRECT || state==EAR_WRONG)?RGB(255,255,255):T_TEXT;
+    uint16_t ink=(state==EAR_CORRECT || state==EAR_WRONG)?RGB(255,255,255):T_TEXT;
     uint16_t dim=(state==EAR_CORRECT || state==EAR_WRONG)?RGB(230,238,230):T_DIM;
-    uint16_t accent=(state==EAR_CORRECT || state==EAR_WRONG)?text:T_THEME;
+    char label[40];
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,bg);
         if(band==0) {
-            cv_text(10,0,TY_LB,ear_saving?"SAVING SETTINGS":"EAR TRAINER",accent);
-            char stats[32]="PTS ";fmt_int(stats+4,(int32_t)score);
-            uint32_t at=str_len(stats);str_cpy(stats+at," S",3);fmt_int(stats+at+2,(int32_t)streak);
-            cv_text(10,25,TY_LB,stats,dim);
-        }
-        else if(band==1) {
+            if(ear_saving) {
+                cv_text_c(120,4,TY_TX,"SAVING SETTINGS",ink,bg);
+                cv_text_c(120,28,TY_LB,"PLEASE WAIT",dim,bg);
+            } else for(uint32_t knob=0;knob<4u;knob++) {
+                int32_t x=(int32_t)knob*60;
+                cv_rrect(x+2,2,56,44,4,T_PANEL,bg);
+                str_cpy(label,"K",2);fmt_int(label+1,(int32_t)knob+1);
+                cv_text_c(x+30,2,TY_LB,label,T_DIM,T_PANEL);
+                if(knob==0)str_cpy(label,scale==EAR_MINOR?"A MIN":"C MAJ",sizeof label);
+                else if(knob==1) {
+                    fmt_int(label,(int32_t)guess);uint32_t at=str_len(label);
+                    str_cpy(label+at," OF ",5);fmt_int(label+at+4,(int32_t)count);
+                } else if(knob==2)str_cpy(label,"--",sizeof label);
+                else fmt_int(label,(int32_t)gap);
+                if(text_w(TY_LB,label)>54 && knob==0)
+                    str_cpy(label,scale==EAR_MINOR?"AMIN":"CMAJ",sizeof label);
+                if(text_w(TY_LB,label)>54 && knob==1) {
+                    fmt_int(label,(int32_t)guess);uint32_t at=str_len(label);
+                    label[at]='/';fmt_int(label+at+1,(int32_t)count);
+                }
+                const aafont_t *f=ty_fit(TY_LB,label,54);
+                cv_text_c(x+30,17,f,label,T_TEXT,T_PANEL);
+                const char *caption=knob==0?(text_w(TY_LB,"SCALE")>54?"KEY":"SCALE"):knob==1?(range==EAR_RANGE_FULL?"FULL":"OCT"):
+                    knob==2?"FREE":"ms";
+                cv_text_c(x+30,32,TY_LB,caption,T_DIM,T_PANEL);
+            }
+        } else if(band==1 && count) {
             static const char *names[]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+            uint32_t width=(224u-(count-1u)*4u)/count,known=count-guess;
             for(uint32_t k=0;k<count;k++) {
-                char label[8]="?";
-                if(k<count-guess) {
-                    str_cpy(label,names[notes[k]%12u],4);
+                int32_t x=8+(int32_t)(k*(width+4u));
+                uint32_t lit=k<known && (sounding&(1u<<k));
+                uint32_t accepted=k>=known && k<known+entered;
+                uint32_t failed=state==EAR_WRONG && k==known+entered;
+                uint32_t good=state==EAR_CORRECT || accepted || lit;
+                uint16_t fill=good?RGB(22,76,52):failed?RGB(92,28,35):T_PANEL;
+                uint16_t border=good?RGB(90,255,150):failed?RGB(255,180,180):T_DIM;
+                if((state==EAR_FIRST || state==EAR_SECOND) && k==index && !lit)border=T_THEME;
+                cv_rrect(x,4,(int32_t)width,40,5,border,bg);
+                cv_rrect(x+2,6,(int32_t)width-4,36,4,fill,border);
+                str_cpy(label,"?",sizeof label);
+                if(k<known || state==EAR_CORRECT) {
+                    str_cpy(label,names[notes[k]%12u],sizeof label);
                     fmt_int(label+str_len(label),(int32_t)(notes[k]/12u)-1);
                 }
-                /* Only known pitches get a held-note highlight; hidden notes stay '?'. */
-                uint32_t lit=k<count-guess && (sounding&(1u<<k));
-                cv_text(10+k*58u,4,TY_TX,label,lit?RGB(90,255,150):text);
-                if(lit) cv_rect(10+k*58u,31,42,3,RGB(90,255,150));
+                const aafont_t *f=ty_fit(TY_VL,label,(int32_t)width-8);
+                cv_text_c(x+(int32_t)width/2,ty_y(24,f),f,label,good || failed?RGB(255,255,255):T_TEXT,fill);
+                if(good)cv_rect(x+5,39,(int32_t)width-10,3,RGB(90,255,150));
             }
         } else if(band==2) {
-            cv_text(10,2,TY_TX,status,text);
-            char progress[32]="TRIES ";fmt_int(progress+6,(int32_t)attempts);
-            uint32_t at=str_len(progress);str_cpy(progress+at,"  ",3);
-            fmt_int(progress+at+2,(int32_t)(entered>guess?guess:entered));
-            at=str_len(progress);progress[at]='/';fmt_int(progress+at+1,(int32_t)guess);
-            cv_text(10,28,TY_LB,progress,dim);
+            const char *status=state==EAR_CORRECT?"CORRECT":state==EAR_WRONG?"WRONG - REPLAY":
+                state==EAR_ANSWER?(armed?"YOUR TURN":"RELEASE KEYS"):
+                state==EAR_PREPARE?"GET READY":"LISTEN";
+            str_cpy(label,status,sizeof label);
+            if(state==EAR_CORRECT) {uint32_t at=str_len(label);str_cpy(label+at," +",3);fmt_int(label+at+2,(int32_t)award);}
+            cv_text_c(120,2,ty_fit(TY_TX,label,224),label,ink,bg);
+            str_cpy(label,"TRY ",5);fmt_int(label+4,(int32_t)attempts);
+            cv_text(8,29,TY_LB,label,dim);
+            str_cpy(label,"NOTES ",7);fmt_int(label+6,(int32_t)(entered>guess?guess:entered));
+            uint32_t at=str_len(label);label[at]='/';fmt_int(label+at+1,(int32_t)guess);
+            cv_text_r(232,29,TY_LB,label,dim,bg);
         } else if(band==3) {
-            if(state==EAR_CORRECT) {
-                char points[24]="+";fmt_int(points+1,(int32_t)award);
-                cv_text(10,0,TY_LB,points,text);
-                cv_text(70,0,TY_LB,"NEXT AUTO",text);
-            } else cv_text(10,0,TY_LB,state==EAR_WRONG?"REPEAT AUTOMATIC":"PLAY: REPLAY",text);
-            cv_text(10,24,TY_LB,"REC: NEXT  HOME: EXIT",dim);
-        }
-        else {
-            cv_text(10,0,TY_LB,scale==EAR_MINOR?"K1 A MINOR":"K1 C MAJOR",text);
-            char label[24]="K2 ";fmt_int(label+3,(int32_t)guess);
-            uint32_t pos=str_len(label);str_cpy(label+pos," OF ",5);fmt_int(label+pos+4,(int32_t)count);
-            pos=str_len(label);str_cpy(label+pos,range==EAR_RANGE_FULL?" FULL":" OCT",6);
-            cv_text(10,16,TY_LB,label,text);
-            str_cpy(label,"PRE ",5);str_cpy(label+4,FM6_PRESETS[ear_settings.preset].name,sizeof label-4u);
-            cv_text(10,32,TY_LB,label,text);
-            str_cpy(label,"K4 ",4);fmt_int(label+3,(int32_t)gap);uint32_t at=str_len(label);str_cpy(label+at,"ms",3);
-            cv_text(140,0,TY_LB,label,text);
+            cv_text(8,0,TY_LB,"SCORE",dim);cv_text(158,0,TY_LB,"STREAK",dim);
+            fmt_int(label,(int32_t)score);cv_text(8,17,ty_fit(TY_VL,label,140),label,ink);
+            fmt_int(label,(int32_t)streak);cv_text(158,17,TY_VL,label,ink);
+        } else if(band==4) {
+            uint32_t engine=ear_preset_engine(ear_settings.preset),preset=ear_preset_index(ear_settings.preset);
+            const preset_t *patch=eng_preset(ENGINES[engine],preset);
+            cv_text(8,1,TY_LB,engine==ENGI_FM6?"FM6":"PROPHET",dim);
+            cv_text_r(232,1,TY_LB,"POLY",dim,bg);
+            cv_free_text(8,23,ty_fit(TY_TX,patch->name,224),patch->name,ink,bg,224);
         }
         cv_blit(0,band*48u);
     }

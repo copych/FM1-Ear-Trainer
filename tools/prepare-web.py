@@ -31,12 +31,12 @@ page = page.replace(" · Melodee", " · Ear Trainer")
 page = page.replace("Stable version", "Development build")
 page = page.replace("Latest ·", "Local ·")
 page = page.replace("Synths, sequencing and effects for the FM-1, installed over USB from this page.",
-                    "Ear training with Melodee FM6 and TINE EP, installed over USB from this page.")
+                    "Ear training with Melodee FM6 and Prophet sounds, installed over USB from this page.")
 page = page.replace('<a class="brand" href="../editor/">Melodee</a>',
                     '<a class="brand" href="../../">Ear Trainer</a>')
 banner = '''<aside style="padding:14px 20px;background:#242126;color:#fff;text-align:center;font:15px/1.5 system-ui">
 <strong>FM-1 Ear Trainer · development prototype</strong><br>
-This installs the development Ear Trainer fork, based on Melodee FM6.
+This installs the development Ear Trainer fork, based on Melodee FM6 and Prophet.
 Hardware timing and both physical revisions still await validation.
 <a style="color:#ffb58a" href="../../emu/">Try the emulator</a> ·
 <a style="color:#ffb58a" href="../../">Home</a></aside>'''
@@ -56,7 +56,7 @@ page = (emu / "index.html").read_text(encoding="utf-8")
 page = page.replace("<title>Melodee in the browser</title>", "<title>FM-1 Ear Trainer · Emulator</title>")
 page = page.replace("<h1>Melodee", "<h1>FM-1 Ear Trainer")
 page = page.replace("<main>", '''<main><nav><a href="../">Home</a> · <a href="../webapp/installer/">Install on FM-1</a> · <a href="../webapp/manual/">Guide</a></nav>
-<p>Switch on, then choose <strong>Start training</strong>. Listen and reproduce the hidden ending notes in order. K1: major/minor; K2: complexity (hidden of total, octave then full keyboard); PRESETS: FM6 sound (poly); K4: time between note starts (0 = chord). Release keys between answers.</p>
+<p>Switch on, then choose <strong>Start training</strong>. Listen and reproduce the hidden ending notes in order. K1: major/minor; K2: complexity (hidden of total, octave then full keyboard); PRESETS: FM6 / Prophet sound (poly); K4: time between note starts (0 = chord). Release keys between answers.</p>
 <p><button id="ear-start" disabled>Start training</button>
 <button id="ear-retry" disabled>Replay / Retry</button>
 <button id="ear-next" disabled>Next question</button>

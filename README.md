@@ -1,12 +1,12 @@
 # FM-1 Ear Trainer
 
-An ear-training game for the M-VAVE FM-1, built on [Melodee](https://github.com/keremimo/melodee) and its existing FM6 synthesizer. Listen, then reproduce the hidden notes using the built-in keyboard or supported MIDI input.
+An ear-training game for the M-VAVE FM-1, built on [Melodee](https://github.com/keremimo/melodee) and its existing FM6 and Prophet synthesizers. Listen, then reproduce the hidden notes using the built-in keyboard or supported MIDI input.
 
-## Current prototype — 0.0.11
+## Current prototype — 0.0.12
 
 - C major and A natural minor exercises with 1–4 distinct pitches within one octave or across the full F3–G5 keyboard range.
 - Choose how many ending notes to hide; reproduce them in order, releasing keys between entries. With every note hidden, the starting pitch changes each question.
-- Select any of 24 factory FM6 presets, always polyphonic; default TINE EP, with overlapping notes and adjustable onset spacing (zero plays a simultaneous chord).
+- Select any of 24 factory FM6 sounds and 200 Prophet factory programs, always polyphonic; default TINE EP, with overlapping notes and adjustable onset spacing (zero plays a simultaneous chord).
 - Known notes highlight on the display and keyboard. Hidden notes never light a key during playback.
 - Green/red feedback, automatic next question after success and same-question replay after mistakes. Extra musical keys are blocked during playback/feedback.
 - Attempt/replay scoring and adaptive weighting toward missed degrees. Scale, complexity/range, spacing and preset save automatically; scores and practice history reset on restart.
@@ -20,7 +20,7 @@ With transport stopped, hold **HOME** and tap **PLAY** to enter training.
 | --- | --- |
 | K1 | C major / A natural minor |
 | K2 | Complexity: hidden notes of total notes, e.g. 1 OF 3; octave block then full-keyboard block; default 1 OF 2 OCT |
-| PRESETS | Factory FM6 preset; always poly mode |
+| PRESETS | FM6 sounds, then Prophet factory programs; always poly mode |
 | K3 | Reserved |
 | K4 | Time between note starts: 0–1000 ms, in 25 ms steps |
 | PLAY | Replay / retry |
@@ -45,7 +45,7 @@ For local use after building the site, run `node tools/serve-site.cjs 8010` (or 
 
 ## Validation and limits
 
-Native/WASM game tests, target builds and package/hash checks have passed. See the [latest validation/compliance report](docs/SAVED-SETTINGS.md) and [sound/polyphony report](docs/ORIGINAL-PRESET-POLYPHONY.md).
+Native/WASM game tests, target builds and package/hash checks have passed. See the [latest validation/compliance report](docs/KNOB-CARDS-PROPHET.md) and [sound/polyphony report](docs/ORIGINAL-PRESET-POLYPHONY.md).
 
 Both known flash IDs pass software checks. Physical hardware revisions, worst-case audio timing, runtime headroom and recovery are not yet qualified. Back up your unit and establish its recovery route before installing firmware.
 

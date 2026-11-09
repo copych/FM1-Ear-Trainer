@@ -34,7 +34,7 @@ int main(void)
     for(uint32_t scale=0;scale<EAR_SCALES_COUNT;scale++)
     for(uint32_t range=0;range<EAR_RANGES_COUNT;range++)
     for(uint32_t count=1;count<=4;count++)for(uint32_t guess=1;guess<=count;guess++)
-    for(uint32_t preset=0;preset<FM6_NFAC;preset++) {
+    for(uint32_t preset=0;preset<EAR_PRESETS_COUNT;preset++) {
         ear_settings_t want={1000,(uint8_t)scale,(uint8_t)count,(uint8_t)guess,(uint8_t)range,(uint8_t)preset};
         ear_settings=want;persist_t p={0};favorites.factory[1][7]=0xA5;
         settings_export(&p);defaults();assert(settings_import(&p,sizeof p));
@@ -49,7 +49,7 @@ int main(void)
         wire[k]^=1u;assert(!ear_settings_unpack(&out,wire,sizeof wire));wire[k]^=1u;
     }
     /* Correct CRC cannot make invalid values/version legal. */
-    const uint8_t field[]={3,4,5,6,7,8,9,10},bad[]={2,2,2,0,5,24,1,255};
+    const uint8_t field[]={3,4,5,6,7,8,9,10},bad[]={3,2,2,0,5,224,1,255};
     for(uint32_t k=0;k<sizeof field;k++) {
         uint8_t broken[EAR_SETTINGS_BYTES];memcpy(broken,wire,sizeof broken);
         broken[field[k]]=bad[k];broken[11]=ear_settings_crc(broken);

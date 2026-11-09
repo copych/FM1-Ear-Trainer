@@ -253,24 +253,25 @@ int main(void)
     ear_settings.count=4;ear_settings.guess=1;ear_settings.range=EAR_RANGE_OCTAVE;
     assert(ear_ui_start());audio_ms(260);
     serial=ear.serial;uint8_t question[4];memcpy(question,ear.notes,sizeof question);
-    for(uint32_t preset=0;preset<FM6_NFAC;preset++) {
+    for(uint32_t preset=0;preset<EAR_PRESETS_COUNT;preset++) {
         if(preset) { host_enc[panel.enc[EN_PRESET]]=panel.dir[EN_PRESET];ear_ui_input(0); }
-        assert(ear_settings.preset==preset && trk[0].preset==preset && trk[0].p[P_VOICE]==V_POLY);
+        assert(ear_settings.preset==preset && trk[0].preset==ear_preset_index(preset) && trk[0].eng_req==ear_preset_engine(preset) && trk[0].p[P_VOICE]==V_POLY);
         for(uint32_t k=0;k<FX_SLOTS;k++) assert(!trk[0].p[P_FXSEND+k]);
         audio_ms(260);assert(ear.serial==serial && !memcmp(question,ear.notes,sizeof question));
         assert(ear.sounding==15u && !ear_loading && !ear.attempts);
         gates=0;for(uint32_t k=0;k<NVOICE;k++) gates+=trk[0].v[k].gate!=0;
         assert(gates==4u);
         if(preset==2u)save_screen("ear-poly-bass",T_BG);
+        if(preset==FM6_NFAC)save_screen("ear-poly-prophet",T_BG);
     }
-    host_enc[panel.enc[EN_PRESET]]=99*panel.dir[EN_PRESET];ear_ui_input(0);
-    assert(ear_settings.preset==FM6_NFAC-1u);
+    host_enc[panel.enc[EN_PRESET]]=999*panel.dir[EN_PRESET];ear_ui_input(0);
+    assert(ear_settings.preset==EAR_PRESETS_COUNT-1u);
     /* While main publishes a preset, neither generated nor player notes start. */
     ear_loading=1;ear.state=EAR_ANSWER;ear.armed=1;
     uint32_t age=vage;ear_player_press(ear.target);assert(vage==age && !ear.attempts);
     ear_audio_tick(1);assert(!ear.sounding && !ear.armed);
     ear_loading=0;ear_publish(EAR_CMD_REPEAT);audio_ms(1400);assert(ear.state==EAR_ANSWER);
-    for(int preset=FM6_NFAC-2;preset>=0;preset--) {
+    for(int preset=EAR_PRESETS_COUNT-2;preset>=0;preset--) {
         host_enc[panel.enc[EN_PRESET]]=-panel.dir[EN_PRESET];ear_ui_input(0);audio_ms(10);
         assert(ear_settings.preset==preset && trk[0].p[P_VOICE]==V_POLY);
     }
@@ -283,6 +284,13 @@ int main(void)
     ear_publish(EAR_CMD_EXIT);audio_ms(10);assert(!ear.sounding);
     assert(ear_ui_start());audio_ms(10);assert(trk[0].preset==1 && trk[0].p[P_VOICE]==V_POLY);
     ear_publish(EAR_CMD_EXIT);audio_ms(10);
+    /* Both display fonts: four cards, maximum totals and four-digit spacing. */
+    ear.state=EAR_ANSWER;ear.count=4;ear.guess=2;ear.entered=0;ear.armed=1;
+    ear.score=999999;ear.streak=999;ear.gap=1000;ear.range=EAR_RANGE_FULL;
+    for(uint32_t font=0;font<2u;font++) {
+        if(font)PREF_BITS|=PREF_PIXEL;else PREF_BITS&=(uint8_t)~PREF_PIXEL;
+        ui.force=1;save_screen(font?"ear-layout-pixel":"ear-layout-rubik",T_BG);
+    }
     printf("FM6 part state: %zu bytes (host layout; target runtime headroom unmeasured)\n",sizeof(fm6_part_t));
     puts("ear trainer: FM6, keyboard/MIDI, wrong/retry/correct, hold gating and cancellation passed");
     return 0;

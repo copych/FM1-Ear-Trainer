@@ -12,6 +12,13 @@ enum eEarDegree { EAR_DEGREE_SECOND, EAR_DEGREE_THIRD, EAR_DEGREE_FOURTH,
 static const uint8_t ear_intervals[EAR_DEGREES_COUNT]={2,4,5,7,9,11,12};
 enum eEarScale { EAR_MAJOR, EAR_MINOR, EAR_SCALES_COUNT };
 enum eEarRange { EAR_RANGE_OCTAVE, EAR_RANGE_FULL, EAR_RANGES_COUNT };
+#define EAR_PRESETS_COUNT (FM6_NFAC+P5_FACTORY_N)
+_Static_assert(FM6_NFAC==24u && P5_FACTORY_N==200u,"migrate saved sound IDs before changing factory bank sizes");
+_Static_assert(EAR_PRESETS_COUNT<=256u,"training sound IDs fit the checked preference byte");
+/* Stable sound IDs: existing FM6 0..23, Prophet factory programs 24..223.
+ * The hardware adapter maps these to its engine/preset namespace. */
+static uint32_t ear_preset_engine(uint32_t preset) { return preset<FM6_NFAC?ENGI_FM6:ENGI_PROPHET; }
+static uint32_t ear_preset_index(uint32_t preset) { return preset<FM6_NFAC?preset:preset-FM6_NFAC+1u; }
 static const uint8_t ear_minor_intervals[EAR_DEGREES_COUNT]={2,3,5,7,8,10,12};
 /* Main publishes settings and NEXT atomically under the existing IRQ mask. */
 typedef struct { uint16_t gap; uint8_t scale, count, guess, range, preset; } ear_settings_t;
@@ -30,7 +37,7 @@ static uint8_t ear_settings_crc(const uint8_t *p)
 }
 static void ear_settings_pack(uint8_t *p)
 {
-    p[0]='E';p[1]='A';p[2]='R';p[3]=1;
+    p[0]='E';p[1]='A';p[2]='R';p[3]=ear_settings.preset<FM6_NFAC?1u:2u;
     p[4]=ear_settings.scale==EAR_MINOR?1u:0u;
     p[5]=ear_settings.range==EAR_RANGE_FULL?1u:0u;
     p[6]=ear_settings.count;p[7]=ear_settings.guess;p[8]=ear_settings.preset;
@@ -39,9 +46,10 @@ static void ear_settings_pack(uint8_t *p)
 }
 static int ear_settings_unpack(ear_settings_t *out,const uint8_t *p,uint32_t n)
 {
-    if(n!=EAR_SETTINGS_BYTES || p[0]!='E' || p[1]!='A' || p[2]!='R' || p[3]!=1u ||
+    if(n!=EAR_SETTINGS_BYTES || p[0]!='E' || p[1]!='A' || p[2]!='R' || (p[3]!=1u && p[3]!=2u) ||
        p[11]!=ear_settings_crc(p) || p[4]>1u || p[5]>1u ||
-       p[6]<1u || p[6]>4u || p[7]<1u || p[7]>p[6] || p[8]>=FM6_NFAC) return 0;
+       p[6]<1u || p[6]>4u || p[7]<1u || p[7]>p[6] ||
+       p[8]>=(p[3]==1u?FM6_NFAC:EAR_PRESETS_COUNT)) return 0;
     uint32_t gap=p[9]|((uint32_t)p[10]<<8);
     if(gap>1000u || gap%25u) return 0;
     out->scale=p[4]?EAR_MINOR:EAR_MAJOR;out->range=p[5]?EAR_RANGE_FULL:EAR_RANGE_OCTAVE;
@@ -256,7 +264,7 @@ static void ear_audio_tick(uint32_t n)
     if(ear.state==EAR_PREPARE) {
         /* Loading a preset/engine may fade asynchronously. Never spend the
          * first note's gate while its engine is still switching. */
-        if(trk[0].engine!=ENGI_FM6 || trk[0].xf_on) return;
+        if(trk[0].engine!=ear_preset_engine(ear_settings.preset) || trk[0].xf_on) return;
         if(n<ear.left) { ear.left-=n; return; }
         ear.state=EAR_FIRST;ear_generated(ear.notes[0]);
         if(!ear.gap) {

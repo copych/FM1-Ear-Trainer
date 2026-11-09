@@ -1,0 +1,28 @@
+# Local artifacts, SDKs and original nested-repository metadata
+/.local/
+/baseline/
+/build/
+/.toolchains/
+**/node_modules/
+**/__pycache__/
+*.pyc
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Firmware images are built locally, never mistaken for attested releases.
+*.bin
+*.elf
+*.o
+*.wav
+*.ppm
+*.fwsc
+# Required upstream update/recovery assets retain their provenance and licenses.
+!melodee/web/m-bootloader/fm1-uboot.fwsc
+!melodee/assets/**
+!melodee/tests/fixtures/**/*.bin
+!melodee/tests/fixtures/*.bin

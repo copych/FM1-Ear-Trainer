@@ -122,6 +122,7 @@ int main(void)
     assert(ear_points(1,0)==100 && ear_points(2,0)==70 && ear_points(3,0)==40);
     assert(ear_points(4,0)==10 && ear_points(5,0)==0 && ear_points(1,1)==90 && ear_points(3,4)==0);
     assert(ear_intervals[EAR_DEGREE_SEVENTH]==11u);
+    ear.range=EAR_RANGE_FULL;
     uint32_t baseline[EAR_DEGREES_COUNT]={0},adapted[EAR_DEGREES_COUNT]={0};
     memset(ear.need,0,sizeof ear.need);ear.seed=12345;
     for(uint32_t k=0;k<7000u;k++) baseline[ear_note_degree(ear_pick_note(0))]++;
@@ -145,6 +146,7 @@ int main(void)
     host_enc[panel.enc[EN_K2]]=-99*panel.dir[EN_K2];
     host_enc[panel.enc[EN_K4]]=-99*panel.dir[EN_K4];ear_ui_input(0);audio_ms(10);
     assert(ear.count==1u && ear.guess==1u && ear.gap==0u);
+    ear_settings.range=EAR_RANGE_FULL;
     for(uint32_t scale=0;scale<EAR_SCALES_COUNT;scale++)
       for(uint32_t count=1;count<=4;count++) for(uint32_t guess=1;guess<=count;guess++) {
         ear_settings.scale=(uint8_t)scale;ear_settings.count=(uint8_t)count;
@@ -172,7 +174,9 @@ int main(void)
         assert(ear.state==EAR_CORRECT && ear.last_award==100u && ear.score==points+100u);
       }
     /* Full-range coverage, both directions, no duplicates, and deterministic replay. */
+    for(uint32_t range=0;range<EAR_RANGES_COUNT;range++)
     for(uint32_t scale=0;scale<EAR_SCALES_COUNT;scale++) {
+        ear_settings.range=(uint8_t)range;
         uint32_t coverage=0,up=0,down=0;
         ear_settings.scale=(uint8_t)scale;ear_settings.count=4;ear_settings.guess=1;
         memset(ear.need,0,sizeof ear.need);ear.seed=12345;
@@ -187,25 +191,26 @@ int main(void)
             }
         }
         for(uint32_t note=53;note<=79;note++)
-            assert(!!(coverage&(1u<<(note-53u)))==(ear_note_degree(note)<EAR_DEGREES_COUNT));
+            assert(!!(coverage&(1u<<(note-53u)))==(ear_note_degree(note)<EAR_DEGREES_COUNT &&
+                (range==EAR_RANGE_FULL || (note>=ear.root && note<=ear.root+12u))));
         assert(up && down);
         ear.seed=31415;uint32_t one=ear_pick_note(0);ear.seed=31415;
         assert(one==ear_pick_note(0));
     }
-    /* K2 visits every pair in order, reverses, and clamps. K3 is unassigned. */
+    /* K2 visits all twenty range/pair combinations, reverses, and clamps. */
     host_enc[panel.enc[EN_K2]]=-99*panel.dir[EN_K2];ear_ui_input(0);
+    for(uint32_t range=0;range<EAR_RANGES_COUNT;range++)
     for(uint32_t count=1;count<=4;count++) for(uint32_t guess=1;guess<=count;guess++) {
-        assert(ear_settings.count==count && ear_settings.guess==guess);
+        assert(ear_settings.range==range && ear_settings.count==count && ear_settings.guess==guess);
         host_enc[panel.enc[EN_K2]]=panel.dir[EN_K2];ear_ui_input(0);
     }
     assert(ear_settings.count==4 && ear_settings.guess==4);
+    for(int range=EAR_RANGES_COUNT-1;range>=0;range--)
     for(int count=4;count>=1;count--) for(int guess=count;guess>=1;guess--) {
-        assert(ear_settings.count==count && ear_settings.guess==guess);
+        assert(ear_settings.range==range && ear_settings.count==count && ear_settings.guess==guess);
         host_enc[panel.enc[EN_K2]]=-panel.dir[EN_K2];ear_ui_input(0);
     }
-    ear_request=EAR_CMD_NONE;
-    host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0);
-    assert(ear_settings.count==1 && ear_settings.guess==1 && ear_request==EAR_CMD_NONE);
+    assert(ear_settings.range==EAR_RANGE_OCTAVE);
     /* Wrong second submitted note locks the whole multi-note attempt and repeats it. */
     ear_settings.count=4;ear_settings.guess=3;ear_settings.gap=0;
     ear_publish(EAR_CMD_NEXT);audio_ms(2600);
@@ -240,6 +245,40 @@ int main(void)
     ear.guess=ear.count;assert(!ear_ui_key_lights());
     ear_publish(EAR_CMD_EXIT);audio_ms(10);assert(!ear.sounding && ear.playing==-1);
     for(uint32_t k=0;k<NVOICE;k++) assert(!trk[0].v[k].gate);
+    /* Preset browsing during held playback replays the same question in poly. */
+    ear_settings.count=4;ear_settings.guess=1;ear_settings.range=EAR_RANGE_OCTAVE;
+    assert(ear_ui_start());audio_ms(260);
+    serial=ear.serial;uint8_t question[4];memcpy(question,ear.notes,sizeof question);
+    for(uint32_t preset=0;preset<FM6_NFAC;preset++) {
+        if(preset) { host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0); }
+        assert(ear_settings.preset==preset && trk[0].preset==preset && trk[0].p[P_VOICE]==V_POLY);
+        for(uint32_t k=0;k<FX_SLOTS;k++) assert(!trk[0].p[P_FXSEND+k]);
+        audio_ms(260);assert(ear.serial==serial && !memcmp(question,ear.notes,sizeof question));
+        assert(ear.sounding==15u && !ear_loading && !ear.attempts);
+        gates=0;for(uint32_t k=0;k<NVOICE;k++) gates+=trk[0].v[k].gate!=0;
+        assert(gates==4u);
+        if(preset==2u)save_screen("ear-poly-bass",T_BG);
+    }
+    host_enc[panel.enc[EN_K3]]=99*panel.dir[EN_K3];ear_ui_input(0);
+    assert(ear_settings.preset==FM6_NFAC-1u);
+    /* While main publishes a preset, neither generated nor player notes start. */
+    ear_loading=1;ear.state=EAR_ANSWER;ear.armed=1;
+    uint32_t age=vage;ear_player_press(ear.target);assert(vage==age && !ear.attempts);
+    ear_audio_tick(1);assert(!ear.sounding && !ear.armed);
+    ear_loading=0;ear_publish(EAR_CMD_REPEAT);audio_ms(1400);assert(ear.state==EAR_ANSWER);
+    for(int preset=FM6_NFAC-2;preset>=0;preset--) {
+        host_enc[panel.enc[EN_K3]]=-panel.dir[EN_K3];ear_ui_input(0);audio_ms(10);
+        assert(ear_settings.preset==preset && trk[0].p[P_VOICE]==V_POLY);
+    }
+    host_enc[panel.enc[EN_K3]]=-99*panel.dir[EN_K3];ear_ui_input(0);
+    assert(!ear_settings.preset);
+    /* A sound change after success advances, so it cannot award a question twice. */
+    ear.state=EAR_CORRECT;serial=ear.serial;
+    host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0);audio_ms(10);
+    assert(ear.serial==serial+1u);
+    ear_publish(EAR_CMD_EXIT);audio_ms(10);assert(!ear.sounding);
+    assert(ear_ui_start());audio_ms(10);assert(trk[0].preset==1 && trk[0].p[P_VOICE]==V_POLY);
+    ear_publish(EAR_CMD_EXIT);audio_ms(10);
     printf("FM6 part state: %zu bytes (host layout; target runtime headroom unmeasured)\n",sizeof(fm6_part_t));
     puts("ear trainer: FM6, keyboard/MIDI, wrong/retry/correct, hold gating and cancellation passed");
     return 0;

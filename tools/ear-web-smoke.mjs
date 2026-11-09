@@ -85,7 +85,7 @@ for(let cycle=0;cycle<3;cycle++) {
 console.log(`WASM game passed: two distinct audible notes; keyboard feedback, retry/next, three exit/re-entry/restart cycles`);
 // Real panel encoder IDs: K1=2, K2=3, K3=4, K4=5.
 ex.web_ear_action(Action.START);run(20);
-ex.web_encoder(2,1);ex.web_encoder(3,8);ex.web_encoder(5,10);
+ex.web_encoder(2,1);ex.web_encoder(3,18);ex.web_encoder(5,10);
 capture=[];run(300);assert.equal(ex.web_led_keys()>>>0,0,'all-hidden first note stays dark');
 run(1600);assert.equal(ex.web_led_keys()>>>0,0,'all-hidden sustained chord stays dark');
 run(1100);const sequence=capture;capture=null;
@@ -110,6 +110,10 @@ for(let k=0;k<4;k++) {
 }
 console.log('Detected hidden pitches:',pitches);
 for(const note of pitches)assert(levelAt(note,2.1,2.3)>.003,'all four pitches must sustain');
+// K3 selects factory FM BASS (normally mono), then replays this question in poly.
+ex.web_encoder(4,2);const bassPeak=run(3000);
+assert(bassPeak>.01,'selected preset must produce audio');
+assert.equal(ex.web_led_keys()>>>0,0,'changing preset must not reveal hidden notes');
 for(let k=0;k<4;k++) {
   ex.web_midi_in(0x90,pitches[k],100);run(20);
   assert.equal(bg()===0x1346,k===3,'award only after all four ordered notes');

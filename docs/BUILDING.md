@@ -41,7 +41,7 @@ available. Build outputs appear under `melodee/build/` and `build/site/`.
 
 ## Development packages and hardware
 
-Project builds use `project.json`: version 0.0.9 and dedicated `FM-1_327008`
+Project builds use `project.json`: version 0.0.10 and dedicated `FM-1_327008`
 identity. Earlier prototypes used shared `FM-1_900`. These development builds
 are not official Melodee releases or hardware-qualified builds. Back up the
 actual unit and confirm its matching recovery procedure before installing.

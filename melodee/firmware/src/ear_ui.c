@@ -20,6 +20,18 @@ static void ear_publish(uint32_t cmd)
     ear_request=(uint8_t)cmd;
     fm1_irq_on();
 }
+/* Factory loading stays in main; the existing FM6 generation/panic publication
+ * stops old voices. Publish poly mode and zero sends before audio resumes. */
+static void ear_ui_load_preset(uint32_t cmd)
+{
+    fm1_irq_off();ear_loading=1;ear_request=EAR_CMD_NONE;fm1_irq_on();
+    engine_load_of(&trk[0],ENGI_FM6,ear_settings.preset);
+    fm1_irq_off();
+    trk[0].p[P_VOICE]=V_POLY;
+    for(uint32_t k=0;k<FX_SLOTS;k++) trk[0].p[P_FXSEND+k]=0;
+    ear_request=(uint8_t)cmd;ear_loading=0;
+    fm1_irq_on();
+}
 static int ear_ui_start(void)
 {
     if(ear_enabled) { ear_publish(EAR_CMD_RETRY); return 1; }
@@ -27,7 +39,7 @@ static int ear_ui_start(void)
     ear_saved_sel=song.sel;
     ear_saved_rec=song.rec; ear_saved_solo=(uint8_t)track_solo;
     for(uint32_t k=0;k<NTRK;k++) ear_saved_mute[k]=(uint8_t)trk[k].p[P_MUTE];
-    engine_load_of(&trk[0],ENGI_FM6,0); /* Original factory TINE EP, explicitly polyphonic below. */
+    ear_ui_load_preset(EAR_CMD_NONE); /* Default TINE EP; retain selected sound on re-entry. */
     fm1_irq_off();
     transport_req=2; song.rec=0; song.sel=0; track_solo=0;
     trk[0].p[P_VOICE]=V_POLY;
@@ -47,24 +59,32 @@ static int ear_ui_input(uint32_t pressed)
     uint32_t home=1u<<panel.btn[B_HOME], play=1u<<panel.btn[B_PLAY];
     if((pressed&play) && (fm1_in.buttons&home)) return ear_ui_start();
     if(!ear_enabled) return 0;
-    /* Consume controls while active: no transport, save or preset changes. */
+    /* Consume controls while active; K3 alone may load an FM6 factory sound. */
     int32_t delta[4];
     for(uint32_t k=0;k<4u;k++) delta[k]=panel_enc(EN_K1+k);
     for(uint32_t k=0;k<NE;k++) (void)panel_enc(k);
-    if(delta[0] || delta[1] || delta[3]) {
+    if(delta[0] || delta[1] || delta[2] || delta[3]) {
+        uint32_t sound_changed, cmd;
         fm1_irq_off();
         int32_t value=(int32_t)ear_settings.scale+delta[0];
         ear_settings.scale=(uint8_t)(value<0?0:value>=EAR_SCALES_COUNT?EAR_SCALES_COUNT-1:value);
-        /* Ten complexity pairs: 1/1, 1/2, 2/2, ... 4/4. */
-        value=(int32_t)(ear_settings.count*(ear_settings.count-1u)/2u+ear_settings.guess-1u)+delta[1];
-        uint32_t complexity=(uint32_t)(value<0?0:value>9?9:value), count=1;
+        /* Ten pairs per range: octave first, then full keyboard. */
+        value=(int32_t)(10u*ear_settings.range+ear_settings.count*(ear_settings.count-1u)/2u+ear_settings.guess-1u)+delta[1];
+        uint32_t complexity=(uint32_t)(value<0?0:value>=10*EAR_RANGES_COUNT?10*EAR_RANGES_COUNT-1:value), count=1;
+        ear_settings.range=(uint8_t)(complexity/10u);complexity%=10u;
         for(;count<4u && complexity>=count;count++) complexity-=count;
         ear_settings.count=(uint8_t)count;
         ear_settings.guess=(uint8_t)(complexity+1u);
         value=(int32_t)ear_settings.gap+delta[3]*25;
         ear_settings.gap=(uint16_t)(value<0?0:value>1000?1000:value);
-        ear_request=EAR_CMD_NEXT;
+        value=(int32_t)ear_settings.preset+delta[2];
+        uint32_t preset=(uint32_t)(value<0?0:value>=FM6_NFAC?FM6_NFAC-1:value);
+        sound_changed=preset!=ear_settings.preset;ear_settings.preset=(uint8_t)preset;
+        cmd=delta[0] || delta[1] || delta[3] || ear.state==EAR_CORRECT?EAR_CMD_NEXT:EAR_CMD_REPEAT;
+        if(sound_changed) { ear_loading=1;ear_request=EAR_CMD_NONE; }
+        else if(delta[0] || delta[1] || delta[3]) ear_request=(uint8_t)cmd;
         fm1_irq_on();ui.force=1;
+        if(sound_changed) ear_ui_load_preset(cmd);
     }
     if(pressed&home) {
         ear_publish(EAR_CMD_EXIT);
@@ -81,7 +101,7 @@ static int ear_ui_input(uint32_t pressed)
 }
 static void ear_ui_draw(void)
 {
-    uint32_t state, attempts, armed, score, streak, award, count, guess, entered, index, scale, gap, sounding;
+    uint32_t state, attempts, armed, score, streak, award, count, guess, entered, index, scale, gap, sounding, range;
     uint8_t notes[4];
     static uint32_t last_state=EAR_STATES_COUNT, last_attempts, last_armed, last_entered,last_index;
     fm1_irq_off();
@@ -89,6 +109,7 @@ static void ear_ui_draw(void)
     score=ear.score;streak=ear.streak;award=ear.last_award;
     count=ear.count;guess=ear.guess;entered=ear.entered;index=ear.index;scale=ear.scale;gap=ear.gap;
     sounding=ear.sounding;
+    range=ear.range;
     for(uint32_t k=0;k<4u;k++) notes[k]=ear.notes[k];
     fm1_irq_on();
     if(!ui.force && state==last_state && attempts==last_attempts && armed==last_armed && entered==last_entered && index==last_index) return;
@@ -143,9 +164,12 @@ static void ear_ui_draw(void)
             cv_text(10,0,TY_LB,scale==EAR_MINOR?"K1 A MINOR":"K1 C MAJOR",text);
             char label[24]="K2 ";fmt_int(label+3,(int32_t)guess);
             uint32_t pos=str_len(label);str_cpy(label+pos," OF ",5);fmt_int(label+pos+4,(int32_t)count);
-            cv_text(10,24,TY_LB,label,text);
+            pos=str_len(label);str_cpy(label+pos,range==EAR_RANGE_FULL?" FULL":" OCT",6);
+            cv_text(10,16,TY_LB,label,text);
+            str_cpy(label,"K3 ",4);str_cpy(label+3,FM6_PRESETS[ear_settings.preset].name,sizeof label-3u);
+            cv_text(10,32,TY_LB,label,text);
             str_cpy(label,"K4 ",4);fmt_int(label+3,(int32_t)gap);uint32_t at=str_len(label);str_cpy(label+at,"ms",3);
-            cv_text(140,24,TY_LB,label,text);
+            cv_text(140,0,TY_LB,label,text);
         }
         cv_blit(0,band*48u);
     }

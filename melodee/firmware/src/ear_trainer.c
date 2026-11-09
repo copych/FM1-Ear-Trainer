@@ -11,17 +11,20 @@ enum eEarDegree { EAR_DEGREE_SECOND, EAR_DEGREE_THIRD, EAR_DEGREE_FOURTH,
     EAR_DEGREE_FIFTH, EAR_DEGREE_SIXTH, EAR_DEGREE_SEVENTH, EAR_DEGREE_OCTAVE, EAR_DEGREES_COUNT };
 static const uint8_t ear_intervals[EAR_DEGREES_COUNT]={2,4,5,7,9,11,12};
 enum eEarScale { EAR_MAJOR, EAR_MINOR, EAR_SCALES_COUNT };
+enum eEarRange { EAR_RANGE_OCTAVE, EAR_RANGE_FULL, EAR_RANGES_COUNT };
 static const uint8_t ear_minor_intervals[EAR_DEGREES_COUNT]={2,3,5,7,8,10,12};
 /* Main publishes settings and NEXT atomically under the existing IRQ mask. */
-static struct { uint16_t gap; uint8_t scale, count, guess; } ear_settings={250,EAR_MAJOR,2,1};
-static volatile uint8_t ear_enabled, ear_request;
+static struct { uint16_t gap; uint8_t scale, count, guess, range, preset; }
+    ear_settings={250,EAR_MAJOR,2,1,EAR_RANGE_OCTAVE,0};
+/* Main brackets preset publication; audio/input cannot start notes mid-load. */
+static volatile uint8_t ear_enabled, ear_request, ear_loading;
 static struct {
     uint32_t left, seed, serial, attempts;
     uint32_t score, solved;
     uint16_t replays, last_award, streak;
     int32_t playing, player;
     uint8_t state, root, target, armed, degree, need[EAR_DEGREES_COUNT];
-    uint8_t notes[4], degrees[4], count, guess, index, entered, scale, sounding;
+    uint8_t notes[4], degrees[4], count, guess, index, entered, scale, sounding, range;
     uint16_t gap;
 } ear = { .playing = -1, .player = -1 };
 static uint32_t ear_points(uint32_t attempts,uint32_t replays)
@@ -51,11 +54,13 @@ static uint32_t ear_pick_note(uint32_t excluded)
 {
     uint32_t total=0;
     for(uint32_t key=0;key<27u;key++) {
+        if(ear.range==EAR_RANGE_OCTAVE && (53u+key<ear.root || 53u+key>ear.root+12u)) continue;
         uint32_t d=ear_note_degree(53u+key);
         if(!(excluded&(1u<<key)) && d<EAR_DEGREES_COUNT) total+=4u+2u*ear.need[d];
     }
-    uint32_t ticket=ear_random()%total; /* At most four exclusions, >=15 scale keys. */
+    uint32_t ticket=ear_random()%total; /* >=8 scale keys, at most four exclusions. */
     for(uint32_t key=0;key<27u;key++) {
+        if(ear.range==EAR_RANGE_OCTAVE && (53u+key<ear.root || 53u+key>ear.root+12u)) continue;
         uint32_t d=ear_note_degree(53u+key);
         if((excluded&(1u<<key)) || d>=EAR_DEGREES_COUNT) continue;
         uint32_t weight=4u+2u*ear.need[d];
@@ -120,7 +125,7 @@ static void ear_player_stop(void)
 }
 static void ear_player_press(uint32_t note)
 {
-    if(ear.state!=EAR_ANSWER || !ear.armed) return;
+    if(ear_loading || ear.state!=EAR_ANSWER || !ear.armed) return;
     ear_player_stop();
     ear.player=(int32_t)note;
     trk_note_on(&trk[0],note,100u);
@@ -176,6 +181,10 @@ static void ear_audio_tick(uint32_t n)
         ear_generated(-1); ear_player_stop(); ear.state=EAR_OFF; ear_enabled=0; return;
     }
     if(!ear_enabled) return;
+    if(ear_loading) {
+        ear_generated(-1);ear_player_stop();ear.armed=0;
+        ear.state=EAR_PREPARE;ear.left=FS/5u;return;
+    }
     /* A solved question cannot be replayed for another points award. */
     if(cmd==EAR_CMD_RETRY && ear.state==EAR_CORRECT) cmd=EAR_CMD_NEXT;
     if(cmd==EAR_CMD_NONE && (ear.state==EAR_CORRECT || ear.state==EAR_WRONG)) {
@@ -189,7 +198,7 @@ static void ear_audio_tick(uint32_t n)
             if(ear.serial && ear.state!=EAR_CORRECT) ear.streak=0; /* Skip/exit breaks a clean run. */
             uint32_t previous=ear.notes[0];
             ear.scale=ear_settings.scale;ear.count=ear_settings.count;
-            ear.guess=ear_settings.guess;ear.gap=ear_settings.gap;
+            ear.guess=ear_settings.guess;ear.gap=ear_settings.gap;ear.range=ear_settings.range;
             ear.root=ear.scale==EAR_MINOR?57u:60u; /* A3 / C4: playable octaves. */
             uint32_t used=0;
             for(uint32_t k=0;k<ear.count;k++) {

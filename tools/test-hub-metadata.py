@@ -11,7 +11,7 @@ sys.path.insert(0, str(root / "melodee/tools"))
 import build
 
 project = json.loads((root / "project.json").read_text())
-assert build.project_identity(root / "project.json") == ("FM-1_327008", "v0.0.8")
+assert build.project_identity(root / "project.json") == ("FM-1_327008", "v" + project["version"])
 with tempfile.TemporaryDirectory() as temp:
     path = Path(temp) / "bad.json"
     for product in ("FM-1_12", "FM-1_123456789", "OTHER_327008", 'FM-1_327008"'):

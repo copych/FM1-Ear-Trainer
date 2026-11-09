@@ -30,19 +30,39 @@ static uint32_t ear_points(uint32_t attempts,uint32_t replays)
     uint32_t base=attempts>=1u && attempts<=4u?points[attempts-1u]:0u;
     return replays>=10u || replays*10u>=base?0u:base-replays*10u;
 }
-static uint32_t ear_pick_degree(void)
+static uint32_t ear_random(void)
 {
-    uint32_t total=0;
-    for(uint32_t k=0;k<EAR_DEGREES_COUNT;k++) total+=4u+2u*ear.need[k];
     if(!ear.seed) ear.seed=0xEA12345u;
     ear.seed^=ear.seed<<13;ear.seed^=ear.seed>>17;ear.seed^=ear.seed<<5;
-    uint32_t ticket=ear.seed%total;
-    for(uint32_t k=0;k<EAR_DEGREES_COUNT;k++) {
-        uint32_t weight=4u+2u*ear.need[k];
-        if(ticket<weight) return k;
+    return ear.seed;
+}
+/* Scale-relative pitch class, including tonic octaves in the octave bucket. */
+static uint32_t ear_note_degree(uint32_t note)
+{
+    uint32_t pitch=(note+12u-ear.root%12u)%12u;
+    const uint8_t *intervals=ear.scale==EAR_MINOR?ear_minor_intervals:ear_intervals;
+    for(uint32_t d=0;d<EAR_DEGREES_COUNT;d++)
+        if(pitch==intervals[d]%12u) return d;
+    return EAR_DEGREES_COUNT;
+}
+/* Two fixed 27-key scans: weighted sampling without replacement, no retries.
+ * All scale notes on F3..G5 are eligible, above and below the reference. */
+static uint32_t ear_pick_note(uint32_t excluded)
+{
+    uint32_t total=0;
+    for(uint32_t key=0;key<27u;key++) {
+        uint32_t d=ear_note_degree(53u+key);
+        if(!(excluded&(1u<<key)) && d<EAR_DEGREES_COUNT) total+=4u+2u*ear.need[d];
+    }
+    uint32_t ticket=ear_random()%total; /* At most four exclusions, >=15 scale keys. */
+    for(uint32_t key=0;key<27u;key++) {
+        uint32_t d=ear_note_degree(53u+key);
+        if((excluded&(1u<<key)) || d>=EAR_DEGREES_COUNT) continue;
+        uint32_t weight=4u+2u*ear.need[d];
+        if(ticket<weight) return 53u+key;
         ticket-=weight;
     }
-    return EAR_DEGREE_SECOND;
+    return ear.root; /* Unreachable for valid game settings. */
 }
 static uint32_t ear_keys;
 static uint16_t ear_down[4];
@@ -171,15 +191,17 @@ static void ear_audio_tick(uint32_t n)
             ear.scale=ear_settings.scale;ear.count=ear_settings.count;
             ear.guess=ear_settings.guess;ear.gap=ear_settings.gap;
             ear.root=ear.scale==EAR_MINOR?57u:60u; /* A3 / C4: playable octaves. */
+            uint32_t used=0;
             for(uint32_t k=0;k<ear.count;k++) {
-                ear.degrees[k]=(uint8_t)ear_pick_degree();
-                const uint8_t *intervals=ear.scale==EAR_MINOR?ear_minor_intervals:ear_intervals;
                 if(!k && ear.guess<ear.count) ear.notes[k]=ear.root;
                 else {
-                    if(!k && ear.serial && ear.root+intervals[ear.degrees[k]]==previous)
-                        ear.degrees[k]=(uint8_t)((ear.degrees[k]+1u)%EAR_DEGREES_COUNT);
-                    ear.notes[k]=(uint8_t)(ear.root+intervals[ear.degrees[k]]);
+                    uint32_t excluded=used;
+                    if(!k && ear.serial && previous>=53u && previous<=79u)
+                        excluded|=1u<<(previous-53u);
+                    ear.notes[k]=(uint8_t)ear_pick_note(excluded);
                 }
+                used|=1u<<(ear.notes[k]-53u);
+                ear.degrees[k]=(uint8_t)ear_note_degree(ear.notes[k]);
             }
             ear.degree=ear.degrees[ear.count-1u];ear.target=ear.notes[ear.count-1u];
             ear.serial++;ear.attempts=0;ear.replays=0;ear.last_award=0;

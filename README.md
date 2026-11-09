@@ -2,9 +2,9 @@
 
 An ear-training game for the M-VAVE FM-1, built on [Melodee](https://github.com/keremimo/melodee) and its existing FM6 synthesizer. Listen, then reproduce the hidden notes using the built-in keyboard or supported MIDI input.
 
-## Current prototype — 0.0.8
+## Current prototype — 0.0.9
 
-- C major and A natural minor exercises with 1–4 notes.
+- C major and A natural minor exercises with 1–4 distinct pitches across the full F3–G5 keyboard range, ascending and descending.
 - Choose how many ending notes to hide; reproduce them in order, releasing keys between entries. With every note hidden, the starting pitch changes each question.
 - Polyphonic factory TINE EP sound, with overlapping notes and adjustable onset spacing (zero plays a simultaneous chord).
 - Known notes highlight on the display and keyboard. Hidden notes never light a key during playback.
@@ -19,14 +19,14 @@ With transport stopped, hold **HOME** and tap **PLAY** to enter training.
 | Control | Function |
 | --- | --- |
 | K1 | C major / A natural minor |
-| K2 | Total notes: 1–4, default 2 |
-| K3 | Hidden ending notes: 1–K2, default 1 |
+| K2 | Complexity: hidden notes of total notes, e.g. 1 OF 3; default 1 OF 2 |
+| K3 | Reserved |
 | K4 | Time between note starts: 0–1000 ms, in 25 ms steps |
 | PLAY | Replay / retry |
 | REC | Next question |
 | HOME | Exit training |
 
-Changing a setting starts a fresh question. The built-in keys use a fixed F3–G5 layout. Matching includes octave. All notes release one second after the last onset; the original TINE EP's natural decay remains.
+K2 steps through 1 of 1, 1 of 2, 2 of 2, 1 of 3, 2 of 3, 3 of 3, 1 of 4, 2 of 4, 3 of 4, and 4 of 4. Changing a setting starts a fresh question. The built-in keys use a fixed F3–G5 layout. Matching includes octave. All notes release one second after the last onset; the original TINE EP's natural decay remains.
 
 Entering training replaces track 1's in-memory sound with TINE EP and temporarily mutes other parts. Track 1 retains TINE EP on exit. Avoid saving over a project whose previous track-1 sound you need.
 
@@ -42,7 +42,7 @@ For local use after building the site, run `node tools/serve-site.cjs 8010` (or 
 
 ## Validation and limits
 
-Native/WASM game tests, target builds and package/hash checks have passed. See the [latest validation/compliance report](docs/KEYBOARD-HIGHLIGHTS.md) and [sound/polyphony report](docs/ORIGINAL-PRESET-POLYPHONY.md).
+Native/WASM game tests, target builds and package/hash checks have passed. See the [latest validation/compliance report](docs/FULL-RANGE-COMPLEXITY.md) and [sound/polyphony report](docs/ORIGINAL-PRESET-POLYPHONY.md).
 
 Both known flash IDs pass software checks. Physical hardware revisions, worst-case audio timing, runtime headroom and recovery are not yet qualified. Back up your unit and establish its recovery route before installing firmware.
 

@@ -51,14 +51,16 @@ static int ear_ui_input(uint32_t pressed)
     int32_t delta[4];
     for(uint32_t k=0;k<4u;k++) delta[k]=panel_enc(EN_K1+k);
     for(uint32_t k=0;k<NE;k++) (void)panel_enc(k);
-    if(delta[0] || delta[1] || delta[2] || delta[3]) {
+    if(delta[0] || delta[1] || delta[3]) {
         fm1_irq_off();
         int32_t value=(int32_t)ear_settings.scale+delta[0];
         ear_settings.scale=(uint8_t)(value<0?0:value>=EAR_SCALES_COUNT?EAR_SCALES_COUNT-1:value);
-        value=(int32_t)ear_settings.count+delta[1];
-        ear_settings.count=(uint8_t)(value<1?1:value>4?4:value);
-        value=(int32_t)ear_settings.guess+delta[2];
-        ear_settings.guess=(uint8_t)(value<1?1:value>ear_settings.count?ear_settings.count:value);
+        /* Ten complexity pairs: 1/1, 1/2, 2/2, ... 4/4. */
+        value=(int32_t)(ear_settings.count*(ear_settings.count-1u)/2u+ear_settings.guess-1u)+delta[1];
+        uint32_t complexity=(uint32_t)(value<0?0:value>9?9:value), count=1;
+        for(;count<4u && complexity>=count;count++) complexity-=count;
+        ear_settings.count=(uint8_t)count;
+        ear_settings.guess=(uint8_t)(complexity+1u);
         value=(int32_t)ear_settings.gap+delta[3]*25;
         ear_settings.gap=(uint16_t)(value<0?0:value>1000?1000:value);
         ear_request=EAR_CMD_NEXT;
@@ -139,8 +141,9 @@ static void ear_ui_draw(void)
         }
         else {
             cv_text(10,0,TY_LB,scale==EAR_MINOR?"K1 A MINOR":"K1 C MAJOR",text);
-            char label[24]="K2 ";fmt_int(label+3,(int32_t)count);cv_text(150,0,TY_LB,label,text);
-            str_cpy(label,"K3 GUESS ",10);fmt_int(label+9,(int32_t)guess);cv_text(10,24,TY_LB,label,text);
+            char label[24]="K2 ";fmt_int(label+3,(int32_t)guess);
+            uint32_t pos=str_len(label);str_cpy(label+pos," OF ",5);fmt_int(label+pos+4,(int32_t)count);
+            cv_text(10,24,TY_LB,label,text);
             str_cpy(label,"K4 ",4);fmt_int(label+3,(int32_t)gap);uint32_t at=str_len(label);str_cpy(label+at,"ms",3);
             cv_text(140,24,TY_LB,label,text);
         }

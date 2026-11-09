@@ -39,7 +39,7 @@ int main(void)
     assert(ear_wav); wav_hdr(ear_wav,0);
     audio_ms(10);
     assert(ear_enabled && ear.state==EAR_PREPARE && trk[0].engine==ENGI_FM6);
-    assert(trk[0].preset==0 && trk[0].p[P_VOICE]==V_POLY && ear.root==60 && ear.target<=72);
+    assert(trk[0].preset==0 && trk[0].p[P_VOICE]==V_POLY && ear.root==60 && ear.target>=53 && ear.target<=79);
     audio_ms(1800);
     assert(ear.state==EAR_ANSWER && ear.attempts==0 && ear.playing==-1);
     ear_ui_draw();
@@ -124,11 +124,11 @@ int main(void)
     assert(ear_intervals[EAR_DEGREE_SEVENTH]==11u);
     uint32_t baseline[EAR_DEGREES_COUNT]={0},adapted[EAR_DEGREES_COUNT]={0};
     memset(ear.need,0,sizeof ear.need);ear.seed=12345;
-    for(uint32_t k=0;k<7000u;k++) baseline[ear_pick_degree()]++;
+    for(uint32_t k=0;k<7000u;k++) baseline[ear_note_degree(ear_pick_note(0))]++;
     ear.need[EAR_DEGREE_SEVENTH]=6u;ear.seed=12345;
-    for(uint32_t k=0;k<7000u;k++) adapted[ear_pick_degree()]++;
+    for(uint32_t k=0;k<7000u;k++) adapted[ear_note_degree(ear_pick_note(0))]++;
     for(uint32_t k=0;k<EAR_DEGREES_COUNT;k++) {
-        assert(baseline[k]>800u && adapted[k]>400u);
+        assert(baseline[k]>500u && adapted[k]>300u);
         printf("degree %u: uniform %u/7000, adapted %u/7000\n",k+2u,baseline[k],adapted[k]);
     }
     assert(adapted[EAR_DEGREE_SEVENTH]>2u*baseline[EAR_DEGREE_SEVENTH]);
@@ -138,7 +138,6 @@ int main(void)
     host_enc[panel.enc[EN_K1]]=panel.dir[EN_K1];ear_ui_input(0);audio_ms(10);
     assert(ear_settings.scale==EAR_MINOR && ear.root==57u);
     host_enc[panel.enc[EN_K2]]=99*panel.dir[EN_K2];
-    host_enc[panel.enc[EN_K3]]=99*panel.dir[EN_K3];
     host_enc[panel.enc[EN_K4]]=99*panel.dir[EN_K4];ear_ui_input(0);audio_ms(10);
     assert(ear.count==4u && ear.guess==4u && ear.gap==1000u);
     audio_ms(5500);assert(ear.state==EAR_ANSWER);
@@ -154,11 +153,9 @@ int main(void)
         assert(ear.state==EAR_ANSWER && ear.armed);
         for(uint32_t k=0;k<count;k++) {
             assert(ear.notes[k]>=53 && ear.notes[k]<=79);
-            uint32_t offset=ear.notes[k]-ear.root;
-            uint32_t valid=offset==0;
-            for(uint32_t d=0;d<EAR_DEGREES_COUNT;d++)
-                valid|=offset==(scale==EAR_MINOR?ear_minor_intervals[d]:ear_intervals[d]);
-            assert(valid);
+            assert(ear_note_degree(ear.notes[k])<EAR_DEGREES_COUNT);
+            for(uint32_t j=0;j<k;j++) assert(ear.notes[j]!=ear.notes[k]);
+
         }
         if(guess<count) assert(ear.notes[0]==ear.root);
         else {
@@ -174,6 +171,41 @@ int main(void)
         }
         assert(ear.state==EAR_CORRECT && ear.last_award==100u && ear.score==points+100u);
       }
+    /* Full-range coverage, both directions, no duplicates, and deterministic replay. */
+    for(uint32_t scale=0;scale<EAR_SCALES_COUNT;scale++) {
+        uint32_t coverage=0,up=0,down=0;
+        ear_settings.scale=(uint8_t)scale;ear_settings.count=4;ear_settings.guess=1;
+        memset(ear.need,0,sizeof ear.need);ear.seed=12345;
+        for(uint32_t quest=0;quest<1000u;quest++) {
+            ear_publish(EAR_CMD_NEXT);ear_audio_tick(1);
+            for(uint32_t k=0;k<ear.count;k++) {
+                uint32_t note=ear.notes[k];
+                assert(note>=53u && note<=79u && ear_note_degree(note)<EAR_DEGREES_COUNT);
+                coverage|=1u<<(note-53u);
+                for(uint32_t j=0;j<k;j++) assert(note!=ear.notes[j]);
+                if(k) { up+=note>ear.notes[k-1];down+=note<ear.notes[k-1]; }
+            }
+        }
+        for(uint32_t note=53;note<=79;note++)
+            assert(!!(coverage&(1u<<(note-53u)))==(ear_note_degree(note)<EAR_DEGREES_COUNT));
+        assert(up && down);
+        ear.seed=31415;uint32_t one=ear_pick_note(0);ear.seed=31415;
+        assert(one==ear_pick_note(0));
+    }
+    /* K2 visits every pair in order, reverses, and clamps. K3 is unassigned. */
+    host_enc[panel.enc[EN_K2]]=-99*panel.dir[EN_K2];ear_ui_input(0);
+    for(uint32_t count=1;count<=4;count++) for(uint32_t guess=1;guess<=count;guess++) {
+        assert(ear_settings.count==count && ear_settings.guess==guess);
+        host_enc[panel.enc[EN_K2]]=panel.dir[EN_K2];ear_ui_input(0);
+    }
+    assert(ear_settings.count==4 && ear_settings.guess==4);
+    for(int count=4;count>=1;count--) for(int guess=count;guess>=1;guess--) {
+        assert(ear_settings.count==count && ear_settings.guess==guess);
+        host_enc[panel.enc[EN_K2]]=-panel.dir[EN_K2];ear_ui_input(0);
+    }
+    ear_request=EAR_CMD_NONE;
+    host_enc[panel.enc[EN_K3]]=panel.dir[EN_K3];ear_ui_input(0);
+    assert(ear_settings.count==1 && ear_settings.guess==1 && ear_request==EAR_CMD_NONE);
     /* Wrong second submitted note locks the whole multi-note attempt and repeats it. */
     ear_settings.count=4;ear_settings.guess=3;ear_settings.gap=0;
     ear_publish(EAR_CMD_NEXT);audio_ms(2600);

@@ -32,9 +32,13 @@ Entering training replaces track 1's in-memory sound with TINE EP and temporaril
 
 ## Build and run
 
-See [build instructions](docs/BUILDING.md) for toolchain/SDK setup, host tests, emulator and installer generation. Build outputs, toolchains and local backups are excluded from Git. This source repository does not provide a hosted installer.
+See [build instructions](docs/BUILDING.md) for toolchain/SDK setup, host tests, emulator and installer generation. Build outputs, toolchains and local backups are excluded from Git. The development installer is hosted on GitHub Pages.
 
-After building the site, run `node tools/serve-site.cjs 8010` (or `./tools/start-web.ps1` on Windows), then open `http://127.0.0.1:8010/`.
+Hosted development site: **[Emulator](https://copych.github.io/FM1-Ear-Trainer/emu/)** · **[Installer](https://copych.github.io/FM1-Ear-Trainer/webapp/installer/)** · [Guide](https://copych.github.io/FM1-Ear-Trainer/webapp/manual/).
+
+GitHub Pages deploys only after the required shared workflow builds and attests the firmware/site, host/WASM checks pass, and the deployment job verifies provenance and matching resources. This is a development channel, not a hardware-qualified release. See [publishing details](docs/GITHUB-PAGES.md).
+
+For local use after building the site, run `node tools/serve-site.cjs 8010` (or `./tools/start-web.ps1` on Windows), then open `http://127.0.0.1:8010/`.
 
 ## Validation and limits
 

@@ -1,4 +1,4 @@
-"""Assemble a local Ear Trainer site using Melodee's checked installer builder."""
+"""Assemble the Ear Trainer site using Melodee's checked installer builder."""
 from pathlib import Path
 import hashlib
 import json
@@ -29,12 +29,12 @@ page = page.replace(" · Melodee", " · Ear Trainer")
 page = page.replace("Stable version", "Development build")
 page = page.replace("Latest ·", "Local ·")
 page = page.replace("Synths, sequencing and effects for the FM-1, installed over USB from this page.",
-                    "Two-note ear training with Melodee FM6 and TINE EP, installed over USB from this page.")
+                    "Ear training with Melodee FM6 and TINE EP, installed over USB from this page.")
 page = page.replace('<a class="brand" href="../editor/">Melodee</a>',
                     '<a class="brand" href="../../">Ear Trainer</a>')
 banner = '''<aside style="padding:14px 20px;background:#242126;color:#fff;text-align:center;font:15px/1.5 system-ui">
 <strong>FM-1 Ear Trainer · development prototype</strong><br>
-This installs the locally built Ear Trainer fork, based on Melodee FM6.
+This installs the development Ear Trainer fork, based on Melodee FM6.
 Hardware timing and both physical revisions still await validation.
 <a style="color:#ffb58a" href="../../emu/">Try the emulator</a> ·
 <a style="color:#ffb58a" href="../../">Home</a></aside>'''
@@ -87,7 +87,7 @@ shutil.copyfile(ROOT / "web/index.html", OUT / "index.html")
 
 digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 manifest = {
-    "name": "FM-1 Ear Trainer", "channel": "local development",
+    "name": "FM-1 Ear Trainer", "channel": "development",
     "version": SITE_VERSION,
     "baseRevision": "165d177a425944f3d30b0b669255a6ed0050c3a5",
     "product": make_site.product_of((FW / "build/melodee.fwsc").read_bytes()),

@@ -28,7 +28,8 @@ const root = path.resolve(__dirname, '../build/site');
   const meta=JSON.parse(html.match(/^const meta = (\{.*\});$/m)[1]);
   assert.equal(meta.product,manifest.product);
   assert.equal(meta.sha256.dual,manifest.files['firmware/ear-trainer-dev.fwsc']);
-  assert.equal(new URL(meta.pkg.dual,new URL('webapp/installer/',base)).pathname,'/firmware/ear-trainer-dev.fwsc');
+  assert.equal(new URL(meta.pkg.dual,new URL('webapp/installer/',base)).pathname,
+    new URL('firmware/ear-trainer-dev.fwsc',base).pathname);
   assert(!/melodee-\d+\.\d+\.\d+\.fwsc/.test(html));
   console.log('Site checks passed: pages/assets, JS syntax, served firmware/resource/WASM hashes, installer selection');
 })().catch(e=>{console.error(e);process.exitCode=1;});

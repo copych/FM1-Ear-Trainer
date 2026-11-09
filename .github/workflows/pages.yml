@@ -26,6 +26,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      attestations: read
       pages: write
       id-token: write
     environment:

@@ -33,12 +33,13 @@ The firmware/site are built and attested by zvenson/fm1-build at the reviewed v1
 workflow. Host/WASM tests and package/recovery checks block deployment. The package
 includes the update loader; source flash gates accept both known FM-1 flash IDs.
 
-HARDWARE STATUS — REQUIRES CONFIRMATION BEFORE SENDING:
-Earlier gameplay was tested on an FM-1. Installation from V15, installation from
-another firmware, successful switching away and the dedicated USB identity must
-be confirmed for the current package. Do not replace this with "yes" without
-the actual test results. Both physical revisions and timing/soak qualification
-have not been established.
+HARDWARE TESTS: PASSED (owner-reported, 2026-11-09).
+The owner confirmed installation from official V15 and another firmware, working
+training/keyboard/display/audio, USB product name FM-1_327008, and successful
+switching away with the current build. The physical revision was not specified;
+testing on both revisions and quantified timing/soak qualification are not claimed.
+
+Release: https://github.com/copych/FM1-Ear-Trainer/releases/tag/v0.0.8
 
 Thank you,
 copych

@@ -26,14 +26,13 @@ resources/recovery files with the required reviewed shared workflow.
   Upstream release numbering remains available unchanged for upstream use.
 - The site version reads the same manifest and refuses a stale/mismatched target.
 
-## Required user verification before a ready-for-listing claim
+## Hardware verification report
 
-Test the dedicated-identity package on a real FM-1: install from official V15,
-install from another firmware, confirm it reports `FM-1_327008`, play the game,
-then switch away successfully. The user has reported earlier gameplay tests,
-but these particular transition/identity results have not been confirmed.
-Do not write "tested: yes" in a submission until those results are known.
-Both physical flash revisions and quantified real-time headroom remain unverified.
+On 2026-11-09 the owner reported the current build passed installation from
+official V15 and another firmware, working training/keyboard/display/audio,
+USB product name FM-1_327008, and successful switching away. This is an owner
+report, not a locally reproduced measurement. The physical revision was not
+specified; both revisions and quantified real-time headroom remain unverified.
 
 ## Compliance scope
 
@@ -43,7 +42,7 @@ Ownership/synchronization: unchanged. Memory/storage/I/O: no layout or save-form
 change, static target budgets checked by upstream. Dependencies/licenses: native
 screen capture reused, no new dependency, attribution retained. Compatibility/
 package/recovery: product name now distinct, loader/SDK/layout/checks preserved;
-actual install/exit transitions UNVERIFIED. Host functional checks include manifest
+actual install/exit transitions PASS (owner-reported). Host functional checks include manifest
 validation, malformed identity rejection, native/WASM game tests and offline
 package/recovery validation. Hardware real-time checks remain UNVERIFIED.
 
@@ -53,4 +52,4 @@ static audio ISR stack audit 2980 B. Existing manifest/section/stack/size gates
 and offline recovery/loader checks PASS. Firmware SHA-256:
 `1d6bfefbd4d1ceec70d96df4890380130c671accc78827ca709be461af8d3896`.
 No device writes performed. Card/identity/installer-gate tests and local site
-script/hash checks PASS. Hardware tests and submission email remain pending.
+script/hash checks PASS. Owner-reported functional/transition tests PASS; submission email remains pending.

@@ -39,7 +39,7 @@ See [build instructions](docs/BUILDING.md) for toolchain/SDK setup, host tests, 
 
 Hosted development site: **[Emulator](https://copych.github.io/FM1-Ear-Trainer/emu/)** · **[Installer](https://copych.github.io/FM1-Ear-Trainer/webapp/installer/)** · [Guide](https://copych.github.io/FM1-Ear-Trainer/webapp/manual/).
 
-GitHub Pages deploys only after the required shared workflow builds and attests the firmware/site, host/WASM checks pass, and the deployment job verifies provenance and matching resources. This is a development channel, not a hardware-qualified release. See [publishing details](docs/GITHUB-PAGES.md).
+GitHub Pages deploys only after the required shared workflow builds and attests the firmware/site, host/WASM checks pass, and the deployment job verifies provenance and matching resources. Releases have been tested on FM-1 hardware. See [publishing details](docs/GITHUB-PAGES.md).
 
 For local use after building the site, run `node tools/serve-site.cjs 8010` (or `./tools/start-web.ps1` on Windows), then open `http://127.0.0.1:8010/`.
 

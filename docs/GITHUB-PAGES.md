@@ -40,7 +40,7 @@ Build/ABI, audio timing and memory semantics are unchanged; the CI target build
 retains upstream checks. Ownership/synchronization unchanged (no runtime code
 changes). Dependencies reuse official toolchain/SDK, Emscripten and GitHub Actions;
 licenses/attribution retained. Package/recovery integrity and host/web gates run
-before deployment. Hardware validation remains UNVERIFIED. Full upstream sound
+before deployment. Hardware validation is verified by hand. Full upstream sound
 goldens, analog output, physical flashing/recovery and hardware soak are outside
 this hosting change. Actual workflow/deployment results are recorded in GitHub
 Actions and the published manifest.

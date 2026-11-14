@@ -6,6 +6,7 @@ const { instance } = await WebAssembly.instantiate(fs.readFileSync('build/emu/me
 });
 const ex = instance.exports;
 ex._initialize(); ex.web_boot(1023);
+// Use real input to earn a nonzero rating, then restore it into a fresh VM.
 const Action={START:0,RETRY:1,NEXT:2,EXIT:3};
 let capture=null;
 function run(ms) {
@@ -115,10 +116,11 @@ ex.web_encoder(6,2);const bassPeak=run(3000);
 assert(bassPeak>.01,'selected preset must produce audio');
 assert.equal(ex.web_led_keys()>>>0,0,'changing preset must not reveal hidden notes');
 for(let k=0;k<4;k++) {
-  ex.web_midi_in(0x90,pitches[k],100);run(20);
-  assert.equal(bg()===0x1346,k===3,'award only after all four ordered notes');
-  ex.web_midi_in(0x80,pitches[k],0);run(20);
+  ex.web_midi_in(0x90,pitches[3-k],100);run(20);
+  assert.equal(bg()===0x1346,k===3,'award only after all four hidden notes, reverse order with keys held');
 }
+for(const note of pitches)ex.web_midi_in(0x80,note,0);
+run(20);
 ex.web_ear_action(Action.EXIT);run(100);
 console.log(`WASM knobs passed: A minor, four sustained hidden notes, 500ms onset spacing, MIDI sequence ${pitches.join(',')}`);
 
@@ -136,6 +138,23 @@ const fresh=(await WebAssembly.instantiate(fs.readFileSync('build/emu/melodee.wa
   env:stub,wasi_snapshot_preview1:stub,
 })).instance.exports;
 fresh._initialize();fresh.web_boot(1023);
+fresh.web_ear_action(Action.START);
+for(let n=0;n<Math.ceil(1800*44.1);n+=128)fresh.web_render(128);
+fresh.web_midi_in(0x90,heard[1],100);
+fresh.web_midi_in(0x80,heard[1],0);
+for(let n=0;n<10;n++)fresh.web_render(128);
+const ratings=Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_ratings(),168));
+assert(ratings.slice(6,166).some(v=>v!==0),'a real first-try solve earns a saved rating');
+fresh.web_ear_action(Action.EXIT);fresh.web_render(128);
+new Uint8Array(ex.memory.buffer,ex.web_ear_ratings(),168).set(ratings);
+assert.equal(ex.web_ear_ratings_restore(),1);
+new Uint8Array(fresh.memory.buffer,fresh.web_ear_ratings(),168).set(ratings);
+assert.equal(fresh.web_ear_ratings_restore(),1);
+assert.deepEqual(Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_ratings(),168)),ratings);
+const badRatings=[...ratings];badRatings[6]^=1;
+new Uint8Array(fresh.memory.buffer,fresh.web_ear_ratings(),168).set(badRatings);
+assert.equal(fresh.web_ear_ratings_restore(),0);
+assert.deepEqual(Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_ratings(),168)),ratings);
 new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12).set(saved);
 assert.equal(fresh.web_ear_settings_restore(),1);
 assert.deepEqual(Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12)),saved);
@@ -145,4 +164,5 @@ assert.equal(fresh.web_ear_settings_restore(),0,'damaged settings rejected witho
 assert.deepEqual(Array.from(new Uint8Array(fresh.memory.buffer,fresh.web_ear_settings(),12)),saved);
 fresh.web_ear_action(Action.START);
 assert.equal(fresh.web_ear_settings_restore(),0,'cannot restore settings during an active question');
+assert.equal(fresh.web_ear_ratings_restore(),0,'cannot restore ratings during an active question');
 console.log('WASM settings PASS: fresh-instance restore, exact preferences, corrupt-record rejection and active-game guard');

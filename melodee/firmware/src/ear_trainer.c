@@ -57,22 +57,76 @@ static int ear_settings_unpack(ear_settings_t *out,const uint8_t *p,uint32_t n)
     return 1;
 }
 static uint32_t ear_settings_ms; /* main: debounce settings writes */
+/* Forty independent rating ladders: scale x range x (hidden of total).
+ * Runtime data stays in the pool. Main alone serializes/checkpoints it. */
+#define EAR_MODES_COUNT 40u
+#define EAR_RATING_MAX 2000u
+#define EAR_RATINGS_BYTES 168u
+_Static_assert(EAR_MODES_COUNT==EAR_SCALES_COUNT*EAR_RANGES_COUNT*10u,"migrate rating mode IDs before adding scales/ranges");
+static uint16_t ear_ratings[EAR_MODES_COUNT][2] __attribute__((section(".pool")));
+static volatile uint8_t ear_ratings_dirty;
+static uint32_t ear_ratings_saved_ms;
+static uint32_t ear_mode(uint32_t scale,uint32_t range,uint32_t count,uint32_t guess)
+{ return (scale*EAR_RANGES_COUNT+range)*10u+count*(count-1u)/2u+guess-1u; }
+static uint8_t ear_rating_crc(const uint8_t *p)
+{
+    uint32_t crc=0;
+    for(uint32_t k=0;k<EAR_RATINGS_BYTES-1u;k++) {
+        crc^=p[k];
+        for(uint32_t b=0;b<8u;b++)crc=((crc<<1)^((crc&128u)?7u:0u))&255u;
+    }
+    return (uint8_t)crc;
+}
+static void ear_ratings_pack(uint8_t *p)
+{
+    p[0]='E';p[1]='R';p[2]='S';p[3]=1;p[4]=EAR_MODES_COUNT;p[5]=p[166]=0;
+    for(uint32_t k=0;k<EAR_MODES_COUNT;k++)for(uint32_t j=0;j<2u;j++) {
+        uint32_t at=6u+4u*k+2u*j,v=ear_ratings[k][j];p[at]=(uint8_t)v;p[at+1]=(uint8_t)(v>>8);
+    }
+    p[167]=ear_rating_crc(p);
+}
+static int ear_ratings_unpack(const uint8_t *p,uint32_t n)
+{
+    if(n!=EAR_RATINGS_BYTES || p[0]!='E' || p[1]!='R' || p[2]!='S' || p[3]!=1u ||
+       p[4]!=EAR_MODES_COUNT || p[5] || p[166] || p[167]!=ear_rating_crc(p))return 0;
+    for(uint32_t k=0;k<EAR_MODES_COUNT;k++) {
+        uint32_t at=6u+4u*k,current=p[at]|((uint32_t)p[at+1]<<8),best=p[at+2]|((uint32_t)p[at+3]<<8);
+        if(current>best || best>EAR_RATING_MAX)return 0;
+    }
+    for(uint32_t k=0;k<EAR_MODES_COUNT;k++)for(uint32_t j=0;j<2u;j++) {
+        uint32_t at=6u+4u*k+2u*j;ear_ratings[k][j]=(uint16_t)(p[at]|((uint32_t)p[at+1]<<8));
+    }
+    ear_ratings_dirty=0;return 1;
+}
 /* Main brackets preset publication; audio/input cannot start notes mid-load. */
 static volatile uint8_t ear_enabled, ear_request, ear_loading, ear_saving;
 static struct {
     uint32_t left, seed, serial, attempts;
     uint32_t score, solved;
-    uint16_t replays, last_award, streak;
+    uint16_t replays, streak;
+    int16_t last_award;
     int32_t playing, player;
     uint8_t state, root, target, armed, degree, need[EAR_DEGREES_COUNT];
     uint8_t notes[4], degrees[4], count, guess, index, entered, scale, sounding, range;
     uint16_t gap;
+    uint8_t matched, mode, rated;
 } ear = { .playing = -1, .player = -1 };
-static uint32_t ear_points(uint32_t attempts,uint32_t replays)
+/* Bounded integer Elo-like update. At the mode's reference rating, a clean
+ * answer wins 10 and an error loses 10. Expected success rises with rating,
+ * so the score converges instead of rewarding endless easy repetitions. */
+static void ear_rate(int success)
 {
-    static const uint8_t points[]={100,70,40,10};
-    uint32_t base=attempts>=1u && attempts<=4u?points[attempts-1u]:0u;
-    return replays>=10u || replays*10u>=base?0u:base-replays*10u;
+    uint32_t mode=ear.mode;
+    int32_t rating=ear_ratings[mode][0];
+    int32_t reference=100+(int32_t)ear.guess*120+(int32_t)(ear.count-1u)*60+(int32_t)ear.range*150;
+    int32_t expected=50+(rating-reference)/20;
+    if(expected<5)expected=5;if(expected>95)expected=95;
+    int32_t delta=success?(100-expected+4)/5:-(expected+4)/5;
+    int32_t next=rating+delta;if(next<0)next=0;if(next>EAR_RATING_MAX)next=EAR_RATING_MAX;
+    ear.last_award=(int16_t)(next-rating);ear.score=(uint32_t)next;
+    ear_ratings[mode][0]=(uint16_t)next;
+    if(next>ear_ratings[mode][1])ear_ratings[mode][1]=(uint16_t)next;
+    if(next!=rating)ear_ratings_dirty=1;
 }
 static uint32_t ear_random(void)
 {
@@ -137,17 +191,20 @@ static void ear_answer(uint32_t note)
 {
     if (ear.state != EAR_ANSWER || !ear.armed) return;
     if(!ear.entered && ear.attempts<255u) ear.attempts++;
-    uint32_t expected=ear.count-ear.guess+ear.entered;
-    ear.degree=ear.degrees[expected];
-    if(note==ear.notes[expected] && ++ear.entered<ear.guess) {
-        ear.armed=0; return; /* Release before the next ordered answer. */
+    uint32_t found=4u;
+    for(uint32_t k=ear.count-ear.guess;k<ear.count;k++)
+        if(note==ear.notes[k] && !(ear.matched&(1u<<k)))found=k;
+    if(found<4u) {
+        ear.matched|=(uint8_t)(1u<<found);ear.entered++;
+        if(ear.entered<ear.guess)return; /* Any order, including simultaneous presses. */
     }
-    ear.state = note == ear.notes[expected] ? EAR_CORRECT : EAR_WRONG;
+    ear.state = found<4u ? EAR_CORRECT : EAR_WRONG;
     ear.armed=0; /* One submitted note per attempt, including audible feedback. */
     ear.left=FS; /* One second of feedback before next/repeat. */
     if(ear.state==EAR_CORRECT) {
-        ear.last_award=(uint16_t)ear_points(ear.attempts,ear.replays);
-        ear.score=ear.score>999999u-ear.last_award?999999u:ear.score+ear.last_award;
+        ear.last_award=0;
+        if(ear.attempts==1u && !ear.replays && !ear.rated)ear_rate(1);
+        ear.rated=1;
         if(ear.solved<999999u) ear.solved++;
         if(ear.attempts==1u && !ear.replays) {
             if(ear.streak<999u) ear.streak++;
@@ -155,8 +212,12 @@ static void ear_answer(uint32_t note)
                 if(ear.need[ear.degrees[k]]) ear.need[ear.degrees[k]]--;
         } else ear.streak=0;
     } else {
+        ear_rate(0);ear.rated=1;
         ear.streak=0;
-        if(ear.need[ear.degree]<6u) ear.need[ear.degree]++;
+        /* Unmatched tones are the uncertainty; arrival order has no meaning. */
+        for(uint32_t k=ear.count-ear.guess;k<ear.count;k++)if(!(ear.matched&(1u<<k))) {
+            ear.degree=ear.degrees[k];if(ear.need[ear.degree]<6u)ear.need[ear.degree]++;
+        }
     }
 }
 static void ear_player_stop(void)
@@ -220,6 +281,7 @@ static void ear_audio_tick(uint32_t n)
     uint32_t cmd=ear_request;
     ear_request=EAR_CMD_NONE;
     if(cmd==EAR_CMD_EXIT) {
+        if(ear.serial && !ear.rated && ear.state!=EAR_OFF)ear_rate(0);
         ear_generated(-1); ear_player_stop(); ear.state=EAR_OFF; ear_enabled=0; return;
     }
     if(!ear_enabled) return;
@@ -237,11 +299,14 @@ static void ear_audio_tick(uint32_t n)
         ear_generated(-1);
         ear_player_stop();
         if(cmd==EAR_CMD_NEXT) {
+            if(ear.serial && !ear.rated && ear.state!=EAR_OFF)ear_rate(0);
             if(ear.serial && ear.state!=EAR_CORRECT) ear.streak=0; /* Skip/exit breaks a clean run. */
             uint32_t previous=ear.notes[0];
             ear.scale=ear_settings.scale;ear.count=ear_settings.count;
             ear.guess=ear_settings.guess;ear.gap=ear_settings.gap;ear.range=ear_settings.range;
             ear.root=ear.scale==EAR_MINOR?57u:60u; /* A3 / C4: playable octaves. */
+            ear.mode=(uint8_t)ear_mode(ear.scale,ear.range,ear.count,ear.guess);
+            ear.score=ear_ratings[ear.mode][0];ear.rated=0;
             uint32_t used=0;
             for(uint32_t k=0;k<ear.count;k++) {
                 if(!k && ear.guess<ear.count) ear.notes[k]=ear.root;
@@ -257,9 +322,10 @@ static void ear_audio_tick(uint32_t n)
             ear.degree=ear.degrees[ear.count-1u];ear.target=ear.notes[ear.count-1u];
             ear.serial++;ear.attempts=0;ear.replays=0;ear.last_award=0;
         } else if(cmd==EAR_CMD_RETRY && ear.replays<999u) {
+            if(!ear.rated) {ear_rate(0);ear.rated=1;}
             ear.replays++;
         }
-        ear.state=EAR_PREPARE; ear.left=FS/5u; ear.armed=0;ear.index=0;ear.entered=0;
+        ear.state=EAR_PREPARE; ear.left=FS/5u; ear.armed=0;ear.index=0;ear.entered=0;ear.matched=0;
     }
     if(ear.state==EAR_PREPARE) {
         /* Loading a preset/engine may fade asynchronously. Never spend the

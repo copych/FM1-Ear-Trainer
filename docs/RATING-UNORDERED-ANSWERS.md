@@ -1,0 +1,34 @@
+# Rating and unordered answers — 0.0.14
+
+Each of the 40 scale × range × (hidden of total) modes has a current rating and best rating. Both start at 0; the range is 0..2000. Preset and onset spacing do not create new modes. Compare within the same mode and preferably with the same listening conditions. This is a provisional game rating, not a calibrated population assessment.
+
+For a mode, reference = 100 + 120 × hidden + 60 × (total−1) + 150 × full-range. Expected success percentage = clamp(50 + trunc((rating−reference)/20), 5, 95). A clean first-try solve gains ceil((100−expected)/5). Each failed attempt loses ceil(expected/5), floored at zero. Retried success gains zero. The first manual replay or abandoning an unscored question incurs one failure; further manual replays do not add penalties. A new failed attempt still incurs its own penalty. Automatic repeats carry no extra penalty. No response-speed factor is used. This bounded integer Elo-like approximation avoids a purely accumulating score; its difficulty reference and update scale are design choices awaiting usage calibration.
+
+Hidden notes are an exact MIDI-pitch set, octave included. Any order is accepted at every spacing, including zero. Newly pressed correct pitches count once, without requiring releases between distinct pitches. Duplicate MIDI note-ons from the same owner are ignored by the existing ownership path; releasing and resubmitting an already accepted pitch fails rather than substituting for another tone. Known reference notes do not count as hidden answers. Incorrect input locks the attempt and repeats the same question. Partial accepted cards track their actual note indices; unknown pitches remain hidden until full success.
+
+## Storage and ownership
+
+160 bytes (40 × current/best uint16 pairs) live in the existing pool. Audio owns rating updates, input matching and the dirty flag; no allocation, flash, serialization or waits occur there. Matcher work is bounded by four notes and degree weighting by four tones. Existing sample scheduling and synth DSP are unchanged. Main only serializes while inactive or inside the existing ear_saving quiet window; browser worklet runs sequentially between render calls.
+
+A 168-byte ERS version 1 trailer stores explicit little-endian pairs plus count/reserved bytes and CRC8. It follows the optional template and precedes the existing BLE tail. PER5 remains 604 bytes, its template offset is unchanged, no favorites bytes or flash partitions are repurposed. Old records without ratings restore zeros; invalid/truncated/unknown statistics records cannot replace live ratings. A recognized-size damaged trailer resets only ratings on boot. Existing A/B outer checksums and header-last commit remain authoritative for interrupted writes. Capacity is compile-time checked with the largest template and BLE tail.
+
+Main checkpoints dirty ratings once per minute during quiet answer pauses, with existing held-key, voice, flash-ID, transport, USB and protected-template/retry gates. Existing preference saves also include current ratings. Exit drains dirty ratings on the next idle poll. Leave training and allow saving to finish before switching off; abrupt shutdown can lose progress since the last checkpoint. Older firmware may discard the added trailer on a later settings save; export a device backup before downgrading. No new flash region, database, bootloader or package identity is introduced.
+
+Browser stores the same record under fm1-ear-trainer.ratings.v1, separately from existing settings, on the page's origin. The page owns localStorage; worklet does not access it. Storage denial/corruption leaves the game playable. Browser/device progress is not synchronized.
+
+## Compliance and verification
+
+Baseline: source 5d834407b0d2895391a7cfb627d4455fbe308c11; native game/audio captures and settings suites passed before editing (build/scoring-baseline.log). Target: existing FM-1 build, PI32v2 clang 4.0.1 r3, pinned AC79 SDK d179b4484759423312073f5fbb232501aa491047, unchanged dual-core synthesis, sample rate 44100 Hz and existing control/audio ownership.
+
+- Target/build/ABI PASS locally: app 569520 B, package 668948 B, identity FM-1_327008. Static RAM 97368/98304 B, pool 134212/357888 B. Audio ISR stack audit 2984 B. Existing manifest/section/stack and package checks retained.
+- Hot path/numerics PASS by inspection/target closure: four-note bounded matcher, integer constant divisions and clamped updates at input/question boundaries; no new renderer math, double, allocation, storage or logging. 497 linked audio functions verified in SRAM.
+- Ownership/synchronization PASS structurally: audio-owned ratings; main codec at guarded quiet/boot points; unchanged loading/saving publication. Browser operations sequential with render.
+- Memory/storage/I/O PASS for source/build bounds and host checks; fixed 160-byte pool table, checked 168-byte trailer, unchanged flash map and PER5/template layout. No extra staging buffer in scarce static RAM.
+- Dependencies/includes/licenses PASS: no dependency or external assets added, existing notices retained.
+- Compatibility/package/recovery PASS for local target/package checks and host old-record/codec/A-B regressions; downgrade limitations above. Hardware install/recovery not repeated.
+- Host functional validation: native game covers all 24 four-note permutations as separate and held MIDI notes, simultaneous built-in keys, duplicate rejection, rating floor/decreasing gains/best preservation, existing control/playback/preset cases. Settings tests cover all-mode reboot, truncation/CRC/bounds, minute/quiet checkpoint and interrupted A/B commit. Existing settings/origin/persistence suites retained. Native screen captures show RATING/BEST fitting both fonts.
+- Hardware real-time validation UNVERIFIED: no device flashed; both physical revisions, worst-case timing/headroom, actual flash pause and Prophet polyphony must be tested on hardware. Suggested device checks: unordered 2–4 note inputs at 0/1000 ms, wrong/replay locks, mode best restoration after clean exit/reboot, minute checkpoint with held notes, normal USB and four-voice sound workload.
+
+Public artifacts must still pass the mandatory shared-builder blocking tests and attestations; local builds are development evidence only.
+
+Local WASM and page checks PASS: reverse-order held-note chord entry through actual MIDI queue; real first-try solve produces a nonzero record that restores in another VM; corrupt/active restore rejection. Page storage tests cover rating length validation. Final persistence tests also preserve the exact template CRC across rating saves/reboot and reset only ratings for a damaged inner trailer with valid outer A/B CRC. Local firmware SHA-256: cf61406747f33022bee9452ae3cecf3cf0d3cca79e37da2e8dd939957fb03d45 (public CI bytes may differ).

@@ -1412,9 +1412,14 @@ static uint32_t persist_retry_ms;
 #if MELODEE_FLASH
 static int settings_write_record(uint32_t n)
 {
-#if MELODEE_BLE
     uint8_t *dst = proj_wire_borrow();
     memcpy(dst, &set_rec, n);
+#ifdef MELODEE_EAR_TRAINER
+    uint32_t used=0;
+    for(uint32_t k=0;k<EAR_MODES_COUNT;k++)used|=ear_ratings[k][1];
+    if(used) {ear_ratings_pack(dst+n);n+=EAR_RATINGS_BYTES;}
+#endif
+#if MELODEE_BLE
     mb_lock();
     uint32_t revision = mb_revision;
     mb_saved.magic = MEL_BLE_MAGIC;
@@ -1424,7 +1429,14 @@ static int settings_write_record(uint32_t n)
     if (!rc) mb_committed = revision;
     return rc;
 #else
-    return st_save(OBJ_SETTINGS, &set_rec, n);
+    return st_save(OBJ_SETTINGS, dst, n);
+#endif
+#ifdef MELODEE_EAR_TRAINER
+_Static_assert(sizeof set_rec + EAR_RATINGS_BYTES
+#if MELODEE_BLE
+    + sizeof mb_saved
+#endif
+    <= ST_SECTOR-sizeof(st_hdr_t),"ratings and template fit existing A/B sectors");
 #endif
 }
 #endif
@@ -1435,6 +1447,10 @@ _Static_assert(sizeof set_rec + sizeof mb_saved <= ST_SECTOR - sizeof(st_hdr_t),
 static void persist_boot(void)                    /* before settings_init / panel_init */
 {
 #if MELODEE_FLASH
+#ifdef MELODEE_EAR_TRAINER
+    memset(ear_ratings,0,sizeof ear_ratings);ear_ratings_dirty=0;
+    ear_ratings_saved_ms=fm1_ms;
+#endif
     persist_t p;
     boot_work.state = 0;
     uint32_t f = irq_save();
@@ -1463,6 +1479,14 @@ static void persist_boot(void)                    /* before settings_init / pane
             if (saved.magic == MEL_BLE_MAGIC) { mb_saved = saved; n -= sizeof saved; }
         }
 #endif
+#ifdef MELODEE_EAR_TRAINER
+        memset(ear_ratings,0,sizeof ear_ratings);ear_ratings_dirty=0;
+        ear_ratings_saved_ms=fm1_ms;
+        if(n==(int)(sizeof p+EAR_RATINGS_BYTES) || n==(int)(sizeof set_rec+EAR_RATINGS_BYTES)) {
+            n-=EAR_RATINGS_BYTES;
+            (void)ear_ratings_unpack((const uint8_t *)&proj_wire_u+n,EAR_RATINGS_BYTES);
+        }
+#endif
         int tail_ok = n == (int)sizeof p || (n > (int)sizeof p &&
             tmpl_blob_schema((const uint8_t *)&proj_wire_u + sizeof p, (uint32_t)n - sizeof p));
         int owned = 0, foreign, future_owner;
@@ -1483,6 +1507,9 @@ static void persist_boot(void)                    /* before settings_init / pane
             tmpl_old = (uint8_t)!tmpl_take((const uint8_t *)&proj_wire_u + sizeof set_rec.p, (uint32_t)n - sizeof set_rec.p);
         }
         if (foreign) {
+#ifdef MELODEE_EAR_TRAINER
+            memset(ear_ratings,0,sizeof ear_ratings);ear_ratings_dirty=0;
+#endif
 #if MELODEE_BLE
             memset(&mb_saved, 0, sizeof mb_saved);
 #endif
@@ -1598,6 +1625,9 @@ static void settings_poll_inner(void)
     p = persist_saved;
     settings_export(&p);
     if (!persist_repair && !memcmp(&p, &persist_saved, sizeof p) && !tmpl_dirty
+#ifdef MELODEE_EAR_TRAINER
+        && !ear_ratings_dirty
+#endif
 #if MELODEE_BLE
         && mb_revision == mb_committed
 #endif
@@ -1613,6 +1643,9 @@ static void settings_poll_inner(void)
         persist_pending = 0;
         persist_repair = 0;
         tmpl_dirty = 0;
+#ifdef MELODEE_EAR_TRAINER
+        ear_ratings_dirty=0;ear_ratings_saved_ms=fm1_ms;
+#endif
         if (repairing) { BOOT_WORK_PROGRESS(1); BOOT_WORK_END(0); }
     } else {
         persist_pending = 2;
@@ -1625,6 +1658,10 @@ static void settings_poll_inner(void)
 static void settings_poll(void)
 {
 #if MELODEE_FLASH && defined(MELODEE_EAR_TRAINER)
+    /* Main-only checkpoint, at most once per minute while practicing. Exit
+     * drains it on the next idle poll. Existing A/B and quiet guards apply. */
+    if(ear_ratings_dirty && (!ear_enabled || (uint32_t)(fm1_ms-ear_ratings_saved_ms)>=60000u) && !persist_pending)
+        persist_pending=1;
     if(ear_enabled) {
         /* Establish an idle window atomically: a note cannot start between
          * the active-voice check and storage's own IRQ-off flash operation. */

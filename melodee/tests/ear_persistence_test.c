@@ -85,6 +85,43 @@ int main(void)
     persist_t damaged=persist_saved;damaged.favorites.factory[EAR_PREF_ROW][EAR_PREF_BYTE+4]^=1;
     assert(!st_save(OBJ_SETTINGS,&damaged,sizeof damaged));reboot();
     assert(!ear_settings.preset && ear_settings.count==2 && settings.palette==2 && favorites.factory[1][7]==0xA5);
-    puts("Ear settings PASS: PER5 round-trip, legacy/corrupt/truncated validation, idle guard, debounce, reboot and interrupted A/B retry");
+    /* Ratings use a separate checked tail, never favorite bits or template bytes. */
+    for(uint32_t k=0;k<EAR_MODES_COUNT;k++) {
+        ear_ratings[k][0]=(uint16_t)(k*17u);ear_ratings[k][1]=(uint16_t)(k*17u+10u);
+    }
+    ear_ratings_dirty=1;ear_enabled=0;settings_poll();assert(!persist_pending && !ear_ratings_dirty);
+    reboot();
+    for(uint32_t k=0;k<EAR_MODES_COUNT;k++)assert(ear_ratings[k][0]==k*17u && ear_ratings[k][1]==k*17u+10u);
+    assert(ear_settings.count==2 && favorites.factory[1][7]==0xA5);
+    uint8_t scores[EAR_RATINGS_BYTES];ear_ratings_pack(scores);
+    for(uint32_t n=0;n<EAR_RATINGS_BYTES;n++)assert(!ear_ratings_unpack(scores,n));
+    for(uint32_t k=0;k<EAR_RATINGS_BYTES;k++) {
+        scores[k]^=1;assert(!ear_ratings_unpack(scores,sizeof scores));scores[k]^=1;
+        assert(ear_ratings[39][1]==673u);
+    }
+    scores[6]=255;scores[7]=255;scores[167]=ear_rating_crc(scores);
+    assert(!ear_ratings_unpack(scores,sizeof scores));
+    /* Batched checkpoint waits a minute and all normal quiet/held-key gates. */
+    ear_enabled=1;ear.state=EAR_ANSWER;ear.player=-1;ear_request=0;ear_keys=0;
+    memset(ear_down,0,sizeof ear_down);
+    for(uint32_t k=0;k<NPART;k++)for(uint32_t v=0;v<NVOICE;v++)trk[k].v[v].active=0;
+    ear_ratings[2][0]=20;ear_ratings_dirty=1;before=erases;
+    settings_poll();assert(erases==before);
+    fm1_ms+=60000;ear_keys=1;settings_poll();assert(erases==before && persist_pending);
+    ear_keys=0;settings_poll();assert(erases==before+1 && !ear_ratings_dirty);
+    reboot();assert(ear_ratings[2][0]==20 && ear_ratings[2][1]==44);
+    ear_ratings[2][0]=10;ear_ratings_dirty=1;fail_after=0;settings_poll();assert(persist_pending==2);
+    reboot();assert(ear_ratings[2][0]==20);fail_after=-1;
+    /* A live template still occupies its original offset and survives the tail. */
+    settings_init();template_save();assert(template_used());
+    uint32_t template_crc=st_crc32(&tmpl,sizeof tmpl);
+    reboot();assert(template_used() && st_crc32(&tmpl,sizeof tmpl)==template_crc);
+    assert(ear_ratings[2][0]==20 && ear_ratings[39][1]==673u);
+    /* Valid outer A/B CRC with damaged inner stats resets only stats on boot. */
+    uint8_t blob[ST_SECTOR];int n=st_load(OBJ_SETTINGS,blob,sizeof blob);assert(n>0);
+    uint32_t at=sizeof(persist_t)+sizeof(tmpl_t);
+    blob[at+6]^=1;assert(!st_save(OBJ_SETTINGS,blob,(uint32_t)n));
+    reboot();assert(!ear_ratings[39][1] && template_used() && st_crc32(&tmpl,sizeof tmpl)==template_crc);
+    puts("Ear settings/ratings PASS: round-trip, legacy/corrupt/truncated validation, quiet checkpoint, reboot and interrupted A/B save");
     return 0;
 }

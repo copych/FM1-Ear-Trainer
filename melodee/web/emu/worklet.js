@@ -23,6 +23,12 @@ class Melodee extends AudioWorkletProcessor {
         ex.web_ear_settings_restore();
       }
       this.earPrefs = "";
+      if(Array.isArray(m.earRatings) && m.earRatings.length===168 &&
+         m.earRatings.every(v=>Number.isInteger(v) && v>=0 && v<=255)) {
+        new Uint8Array(ex.memory.buffer,ex.web_ear_ratings(),168).set(m.earRatings);
+        ex.web_ear_ratings_restore();
+      }
+      this.earScores="";
       this.mem = ex.memory;
       this.sentFb = -1;
       this.last = 0;
@@ -58,6 +64,9 @@ class Melodee extends AudioWorkletProcessor {
       const prefs = Array.from(new Uint8Array(this.mem.buffer, ex.web_ear_settings(), 12));
       const key = prefs.join(",");
       if (key !== this.earPrefs) { this.earPrefs = key; msg.earSettings = prefs; }
+      const ratings=Array.from(new Uint8Array(this.mem.buffer,ex.web_ear_ratings(),168));
+      const ratingKey=ratings.join(",");
+      if(ratingKey!==this.earScores) {this.earScores=ratingKey;msg.earRatings=ratings;}
       const gen = ex.web_fb_gen(), transfer = [];
       if (gen !== this.sentFb) {
         this.sentFb = gen;

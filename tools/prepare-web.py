@@ -56,7 +56,7 @@ page = (emu / "index.html").read_text(encoding="utf-8")
 page = page.replace("<title>Melodee in the browser</title>", "<title>FM-1 Ear Trainer · Emulator</title>")
 page = page.replace("<h1>Melodee", "<h1>FM-1 Ear Trainer")
 page = page.replace("<main>", '''<main><nav><a href="../">Home</a> · <a href="../webapp/installer/">Install on FM-1</a> · <a href="../webapp/manual/">Guide</a></nav>
-<p>Switch on, then choose <strong>Start training</strong>. Listen and reproduce the hidden ending notes in order. K1: major/minor; K2: complexity (hidden of total, octave then full keyboard); PRESETS: FM6 / Prophet sound (poly); K4: time between note starts (0 = chord). Release keys between answers.</p>
+<p>Switch on, then choose <strong>Start training</strong>. Listen and reproduce the exact hidden pitches in any order. K1: major/minor; K2: complexity (hidden of total, octave then full keyboard); PRESETS: FM6 / Prophet sound (poly); K4: time between note starts (0 = chord). Notes may be entered separately or together. RATING and BEST belong to the selected scale, complexity and range; errors reduce the rating, with a floor of zero. Exit training before switching off to save the latest progress.</p>
 <p><button id="ear-start" disabled>Start training</button>
 <button id="ear-retry" disabled>Replay / Retry</button>
 <button id="ear-next" disabled>Next question</button>

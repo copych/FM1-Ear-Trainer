@@ -78,7 +78,7 @@ int main(void)
     assert(ear.state==EAR_ANSWER && ear.target==target && ear.serial==serial);
     fm1_in.notes=1u<<(target-53u);audio_ms(10);
     assert(ear.state==EAR_CORRECT && ear.attempts==2);
-    assert(ear.last_award==60u && ear.score==60u && !ear.streak);
+    assert(ear.last_award==0 && ear.score==0u && !ear.streak);
     save_screen("ear-correct",RGB(16,104,55));
     audio_ms(800);assert(ear.state==EAR_CORRECT && ear.serial==serial);
     audio_ms(300);assert(ear.serial==serial+1u && !ear.armed && ear.player==-1);
@@ -94,7 +94,8 @@ int main(void)
     midi_event_source=1;
     midi_event(0x90u,0,ear.target,100);
     assert(ear.state==EAR_CORRECT && ear.attempts==1);
-    assert(ear.last_award==100u && ear.score==160u && ear.streak==1u);
+    assert(ear.last_award>0 && ear.score==(uint32_t)ear.last_award && ear.streak==1u);
+    uint32_t earned=ear.score;
     midi_event(0x90u,0,ear.target,0);
     assert(ear.player==-1);
     /* Duplicate notes, separate channels and port loss preserve release gating. */
@@ -106,7 +107,7 @@ int main(void)
     /* Retry/next interrupt generated playback and release its note. */
     serial=ear.serial;
     ear_publish(EAR_CMD_RETRY);audio_ms(250);
-    assert(ear.serial==serial+1u && ear.attempts==0u && ear.score==160u);
+    assert(ear.serial==serial+1u && ear.attempts==0u && ear.score==earned);
     assert(ear.playing==60);
     ear_publish(EAR_CMD_EXIT);audio_ms(10);
     assert(!ear_enabled && ear.state==EAR_OFF && ear.playing==-1 && ear.player==-1);
@@ -119,8 +120,15 @@ int main(void)
         assert(!ear_enabled && !song.playing);
     }
     rewind(ear_wav); wav_hdr(ear_wav,ear_frames); fclose(ear_wav); ear_wav=0;
-    assert(ear_points(1,0)==100 && ear_points(2,0)==70 && ear_points(3,0)==40);
-    assert(ear_points(4,0)==10 && ear_points(5,0)==0 && ear_points(1,1)==90 && ear_points(3,4)==0);
+    /* The rating rewards clean solves, penalizes errors, floors at zero,
+     * preserves best, and gives less gain as the player improves. */
+    ear.mode=0;ear.count=ear.guess=1;ear.range=EAR_RANGE_OCTAVE;
+    ear_ratings[0][0]=ear_ratings[0][1]=0;ear_rate(0);assert(!ear.score);
+    ear_rate(1);uint32_t low_gain=ear.last_award;assert(low_gain>0);
+    ear_ratings[0][0]=ear_ratings[0][1]=1500;ear_rate(1);
+    assert(ear.last_award>0 && (uint32_t)ear.last_award<low_gain);
+    uint32_t best=ear_ratings[0][1];ear_rate(0);assert(ear.score<best && ear_ratings[0][1]==best);
+    ear_ratings[0][0]=ear_ratings[0][1]=0;
     assert(ear_intervals[EAR_DEGREE_SEVENTH]==11u);
     ear.range=EAR_RANGE_FULL;
     uint32_t baseline[EAR_DEGREES_COUNT]={0},adapted[EAR_DEGREES_COUNT]={0};
@@ -168,10 +176,10 @@ int main(void)
         for(uint32_t k=count-guess;k<count;k++) {
             fm1_in.notes=1u<<(ear.notes[k]-53u);audio_ms(10);
             assert(ear.attempts==1u);
-            if(k+1<count) assert(ear.state==EAR_ANSWER && !ear.armed && ear.score==points);
+            if(k+1<count) assert(ear.state==EAR_ANSWER && ear.armed && ear.score==points);
             fm1_in.notes=0;audio_ms(10);
         }
-        assert(ear.state==EAR_CORRECT && ear.last_award==100u && ear.score==points+100u);
+        assert(ear.state==EAR_CORRECT && ear.last_award>0 && ear.score==points+(uint32_t)ear.last_award);
       }
     /* Full-range coverage, both directions, no duplicates, and deterministic replay. */
     for(uint32_t range=0;range<EAR_RANGES_COUNT;range++)
@@ -220,6 +228,35 @@ int main(void)
     midi_event(0x80u,0,52,0);serial=ear.serial;target=ear.target;
     audio_ms(3600);assert(ear.state==EAR_ANSWER && ear.serial==serial && ear.target==target && !ear.entered);
     save_screen("ear-four-mixed",T_BG);
+    /* Every permutation of four hidden notes, both individual and held keys.
+     * These exercise real MIDI ownership, not just the matcher. */
+    ear_settings.count=ear_settings.guess=4;ear_settings.gap=0;
+    for(uint32_t a=0;a<4;a++)for(uint32_t b=0;b<4;b++)
+    for(uint32_t c=0;c<4;c++)for(uint32_t d=0;d<4;d++) {
+        if(a==b || a==c || a==d || b==c || b==d || c==d)continue;
+        uint32_t order[4]={a,b,c,d};
+        for(uint32_t held=0;held<2;held++) {
+            ear_publish(EAR_CMD_NEXT);audio_ms(1500);assert(ear.state==EAR_ANSWER && ear.armed);
+            for(uint32_t k=0;k<4;k++) {
+                midi_event(0x90u,0,ear.notes[order[k]],100);
+                assert(ear.entered==k+1 && ear.attempts==1);
+                if(!held)midi_event(0x80u,0,ear.notes[order[k]],0);
+            }
+            assert(ear.state==EAR_CORRECT);
+            for(uint32_t k=0;k<4;k++)midi_event(0x80u,0,ear.notes[k],0);
+        }
+    }
+    ear_publish(EAR_CMD_NEXT);audio_ms(1500);
+    uint32_t mask=0;for(uint32_t k=0;k<4;k++)mask|=1u<<(ear.notes[k]-53u);
+    fm1_in.notes=mask;audio_ms(10);assert(ear.state==EAR_CORRECT && ear.entered==4);
+    fm1_in.notes=0;audio_ms(10);
+    /* Repeated MIDI messages cannot substitute for missing chord tones. */
+    ear_publish(EAR_CMD_NEXT);audio_ms(1500);
+    midi_event(0x90u,0,ear.notes[3],100);midi_event(0x90u,0,ear.notes[3],100);
+    assert(ear.entered==1 && ear.state==EAR_ANSWER);
+    midi_event(0x80u,0,ear.notes[3],0);midi_event(0x90u,0,ear.notes[3],100);
+    assert(ear.entered==1 && ear.state==EAR_WRONG);
+    midi_event(0x80u,0,ear.notes[3],0);
     /* Sustained arpeggio: earlier gates stay open as each new note enters. */
     ear_settings.count=4;ear_settings.guess=1;ear_settings.gap=250;
     ear_publish(EAR_CMD_NEXT);audio_ms(10);
@@ -286,7 +323,7 @@ int main(void)
     ear_publish(EAR_CMD_EXIT);audio_ms(10);
     /* Both display fonts: four cards, maximum totals and four-digit spacing. */
     ear.state=EAR_ANSWER;ear.count=4;ear.guess=2;ear.entered=0;ear.armed=1;
-    ear.score=999999;ear.streak=999;ear.gap=1000;ear.range=EAR_RANGE_FULL;
+    ear.score=2000;ear_ratings[ear.mode][1]=2000;ear.gap=1000;ear.range=EAR_RANGE_FULL;
     for(uint32_t font=0;font<2u;font++) {
         if(font)PREF_BITS|=PREF_PIXEL;else PREF_BITS&=(uint8_t)~PREF_PIXEL;
         ui.force=1;save_screen(font?"ear-layout-pixel":"ear-layout-rubik",T_BG);

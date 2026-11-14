@@ -108,6 +108,11 @@ EXPORT(web_ear_active) uint32_t web_ear_active(void) { return ear_enabled; }
 /* Same checked record as the device settings. The page owns browser storage;
  * no flash/localStorage operation runs inside the emulated firmware. */
 static uint8_t web_ear_prefs[EAR_SETTINGS_BYTES];
+static uint8_t web_ear_scores[EAR_RATINGS_BYTES];
+EXPORT(web_ear_ratings) uint8_t *web_ear_ratings(void)
+{ ear_ratings_pack(web_ear_scores);return web_ear_scores; }
+EXPORT(web_ear_ratings_restore) uint32_t web_ear_ratings_restore(void)
+{ return !ear_enabled && ear_ratings_unpack(web_ear_scores,sizeof web_ear_scores); }
 EXPORT(web_ear_settings) uint8_t *web_ear_settings(void)
 {
     ear_settings_pack(web_ear_prefs);return web_ear_prefs;

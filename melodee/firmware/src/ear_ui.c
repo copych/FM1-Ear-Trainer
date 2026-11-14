@@ -110,11 +110,12 @@ static int ear_ui_input(uint32_t pressed)
  * Five 48-row tiles retain the existing bounded canvas instead of a framebuffer. */
 static void ear_ui_draw(void)
 {
-    uint32_t state,attempts,armed,score,streak,award,count,guess,entered,index,scale,gap,sounding,range;
+    uint32_t state,attempts,armed,score,best,count,guess,entered,index,scale,gap,sounding,range,matched;
+    int32_t award;
     uint8_t notes[4];
     static uint32_t last_state=EAR_STATES_COUNT,last_attempts,last_armed,last_entered,last_index;
     fm1_irq_off();
-    state=ear.state;attempts=ear.attempts;armed=ear.armed;score=ear.score;streak=ear.streak;award=ear.last_award;
+    state=ear.state;attempts=ear.attempts;armed=ear.armed;score=ear.score;best=ear_ratings[ear.mode][1];award=ear.last_award;matched=ear.matched;
     count=ear.count;guess=ear.guess;entered=ear.entered;index=ear.index;scale=ear.scale;gap=ear.gap;
     sounding=ear.sounding;range=ear.range;
     for(uint32_t k=0;k<4u;k++)notes[k]=ear.notes[k];
@@ -161,8 +162,8 @@ static void ear_ui_draw(void)
             for(uint32_t k=0;k<count;k++) {
                 int32_t x=8+(int32_t)(k*(width+4u));
                 uint32_t lit=k<known && (sounding&(1u<<k));
-                uint32_t accepted=k>=known && k<known+entered;
-                uint32_t failed=state==EAR_WRONG && k==known+entered;
+                uint32_t accepted=!!(matched&(1u<<k));
+                uint32_t failed=state==EAR_WRONG && k>=known && !accepted;
                 uint32_t good=state==EAR_CORRECT || accepted || lit;
                 uint16_t fill=good?RGB(22,76,52):failed?RGB(92,28,35):T_PANEL;
                 uint16_t border=good?RGB(90,255,150):failed?RGB(255,180,180):T_DIM;
@@ -183,7 +184,10 @@ static void ear_ui_draw(void)
                 state==EAR_ANSWER?(armed?"YOUR TURN":"RELEASE KEYS"):
                 state==EAR_PREPARE?"GET READY":"LISTEN";
             str_cpy(label,status,sizeof label);
-            if(state==EAR_CORRECT) {uint32_t at=str_len(label);str_cpy(label+at," +",3);fmt_int(label+at+2,(int32_t)award);}
+            if(state==EAR_CORRECT || state==EAR_WRONG) {
+                uint32_t at=str_len(label);str_cpy(label+at,award>=0?" +":" ",3);
+                fmt_int(label+at+(award>=0?2:1),award);
+            }
             cv_text_c(120,2,ty_fit(TY_TX,label,224),label,ink,bg);
             str_cpy(label,"TRY ",5);fmt_int(label+4,(int32_t)attempts);
             cv_text(8,29,TY_LB,label,dim);
@@ -191,9 +195,9 @@ static void ear_ui_draw(void)
             uint32_t at=str_len(label);label[at]='/';fmt_int(label+at+1,(int32_t)guess);
             cv_text_r(232,29,TY_LB,label,dim,bg);
         } else if(band==3) {
-            cv_text(8,0,TY_LB,"SCORE",dim);cv_text(158,0,TY_LB,"STREAK",dim);
-            fmt_int(label,(int32_t)score);cv_text(8,17,ty_fit(TY_VL,label,140),label,ink);
-            fmt_int(label,(int32_t)streak);cv_text(158,17,TY_VL,label,ink);
+            cv_text(8,0,TY_LB,"RATING",dim);cv_text(128,0,TY_LB,"BEST",dim);
+            fmt_int(label,(int32_t)score);cv_text(8,17,ty_fit(TY_VL,label,104),label,ink);
+            fmt_int(label,(int32_t)best);cv_text(128,17,ty_fit(TY_VL,label,104),label,ink);
         } else if(band==4) {
             uint32_t engine=ear_preset_engine(ear_settings.preset),preset=ear_preset_index(ear_settings.preset);
             const preset_t *patch=eng_preset(ENGINES[engine],preset);

@@ -1,5 +1,7 @@
 # Sustained playback — development 0.0.5
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Development 0.0.6 replaces the decaying EP with [FM6 ORGAN](POLYPHONIC-ORGAN.md)
 so sustained voices remain clearly audible. Timing and hints below still apply.
 

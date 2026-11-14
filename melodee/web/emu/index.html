@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Melodee in the browser</title>
+<title>FM-1 Ear Trainer · Emulator</title>
 <style>
   :root { --bg: #fff; --fg: #000; --dim: #777; --body: #3a3d42; --tray: #26282c; --knob: #1f2124; --btn: #2e3135;
           --label: #e8e8ea; --key-w: #d9dadc; --key-b: #c9cacd; --lit: #ffb347; }
@@ -42,31 +42,35 @@
   .poweron { inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .45); border-radius: inherit; z-index: 2; }
   .poweron[hidden] { display: none; }
   .poweron button { background: var(--lit); border: 0; padding: 10px 24px; font-weight: 600; cursor: pointer; }
+  .start-game { background: var(--lit); color:#171416; border:0; border-radius:8px; padding:12px 24px; font-weight:600; cursor:pointer; }
+  .start-game:disabled { opacity:.65; cursor:default; }
+  details { color:var(--dim); font-size:14px; }
+  summary { cursor:pointer; margin-bottom:12px; }
   .bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Melodee in the browser</h1>
-  <p>Melodee @VERSION@'s UI and sound, as WebAssembly, on a drawn FM-1: the same code the FM-1 runs. Mouse, touch,
-    or the computer keyboard (the letters on the keys). Training preferences are saved in this browser; there is no USB.
-    <a href="../webapp/installer/">Install it on your FM-1</a>.</p>
-  <div class="bar">
-    <button id="holdhome" disabled aria-pressed="false">Hold HOME</button>
-    <button id="releaseheld" disabled>Release held controls</button>
-    <span id="holdstatus" class="small" role="status"></span>
-  </div>
-  <p class="small">Button combinations: click Hold HOME, then another panel button. Or Shift+click any panel button to hold it.
-    A held button has a blue outline. The next button/key release clears the hold. Escape or leaving the window releases everything.</p>
+  <button id="power" class="start-game">Start training</button>
+  <span class="small" id="status" role="status"></span>
   <div class="device" id="device">
-    <div class="poweron" id="poweron"><button id="power">Switch on</button></div>
+    <div class="poweron" id="poweron" aria-hidden="true"></div>
   </div>
-  <div class="bar">
-    <label class="small">MIDI in <select id="midiin"><option value="">none</option></select></label>
-    <span class="small" id="status"></span>
-  </div>
-  <p class="small">Melodee is GPL-3.0, no warranty. <a href="https://github.com/keremimo/melodee">Source</a>.
-    M-VAVE and FM-1 are trademarks of their respective owners.</p>
+  <section aria-label="How to play">
+    <p>Listen, then play the hidden notes in any order. Click the keys or use the computer-keyboard letters printed on them. Highlighted notes are safe to play again.</p>
+    <p><strong>PLAY</strong> repeats the question · <strong>REC</strong> skips · <strong>HOME</strong> leaves training.<br>
+    <strong>K1</strong>: scale · <strong>K2</strong>: notes to guess / range · <strong>K4</strong>: note spacing · <strong>PRESETS</strong>: sound.</p>
+  </section>
+  <details><summary>More controls and MIDI</summary>
+    <div class="bar">
+      <button id="holdhome" disabled aria-pressed="false">Hold HOME</button>
+      <button id="releaseheld" disabled>Release held controls</button>
+      <span id="holdstatus" class="small" role="status"></span>
+      <label class="small">MIDI in <select id="midiin"><option value="">none</option></select></label>
+    </div>
+    <p class="small">Drag or scroll knobs to turn them. For button combinations, use Hold HOME or Shift+click a panel button. Escape releases held controls. Settings and ratings are saved in this browser.</p>
+    <p class="small"><a href="../webapp/manual/">Full guide</a> · <a href="../webapp/installer/">Install on FM-1</a> · <a href="https://github.com/copych/FM1-Ear-Trainer">Source / GPL-3.0</a>. Based on Melodee. M-VAVE and FM-1 are trademarks of their respective owners.</p>
+  </details>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -282,7 +286,10 @@ function readEarSettings() {
 function storeEarSettings(saved) {
   try { localStorage.setItem(EAR_SETTINGS_KEY, JSON.stringify(saved)); } catch {}
 }
+let startPending=false;
 $("power").addEventListener("click", async () => {
+  if(node) { releaseAll();send({type:"ear",action:0});$("power").disabled=true;return; }
+  startPending=true;
   $("power").disabled = true;
   try {
     const wasm = await (await fetch("melodee.wasm")).arrayBuffer();
@@ -295,7 +302,14 @@ $("power").addEventListener("click", async () => {
       if (m.type === "crash") { $("status").textContent = "Stopped: " + m.message; return; }
       if (m.earSettings) storeEarSettings(m.earSettings);
       if (m.earRatings) storeEarRatings(m.earRatings);
-      if (m.type === "frame") { $("holdhome").disabled=false;$("releaseheld").disabled=false; }
+      if (m.type === "frame") {
+        $("holdhome").disabled=false;$("releaseheld").disabled=false;
+        const requested=startPending;
+        if(requested) {startPending=false;send({type:"ear",action:0});}
+        $("power").disabled=!!m.earActive || requested;
+        $("power").textContent=m.earActive?"Training running":"Start training";
+      }
+      if(m.type==="ear-result" && !m.accepted) {$("status").textContent="Stop playback before starting training.";$("power").disabled=false;}
       if (m.fb) draw(m.fb);
       keys.forEach((el, i) => el.classList.toggle("lit", !!(m.keys & (1 << i))));
       buttons.forEach((el, i) => el.classList.toggle("lit", !!(m.buttons & (1 << i))));

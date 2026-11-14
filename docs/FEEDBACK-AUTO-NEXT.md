@@ -1,5 +1,7 @@
 # Hardware feedback follow-up
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Historical 0.0.2 report. Wrong-answer replay and scoring are superseded by
 [Adaptive scoring](ADAPTIVE-SCORING.md) in development build 0.0.3.
 
@@ -50,4 +52,4 @@ WASM tests exercise feedback colors, locked key/MIDI sweeps and automatic next.
 
 No firmware was flashed by the agent. The updated package is available as local
 development build 0.0.2 through the installer. Page/script, package/resource/WASM
-hash and installer-selection checks pass. This revision needs hardware retesting.
+hash and installer-selection checks pass. Functional hardware testing is performed by the project owner.

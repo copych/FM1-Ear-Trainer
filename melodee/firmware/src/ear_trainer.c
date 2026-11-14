@@ -190,6 +190,10 @@ static int ear_held(void)
 static void ear_answer(uint32_t note)
 {
     if (ear.state != EAR_ANSWER || !ear.armed) return;
+    /* Visible references and already uncovered tones are safe to play again.
+     * They neither submit an attempt nor stand in for a missing tone. */
+    for(uint32_t k=0;k<ear.count;k++)
+        if(note==ear.notes[k] && (k<ear.count-ear.guess || (ear.matched&(1u<<k))))return;
     if(!ear.entered && ear.attempts<255u) ear.attempts++;
     uint32_t found=4u;
     for(uint32_t k=ear.count-ear.guess;k<ear.count;k++)

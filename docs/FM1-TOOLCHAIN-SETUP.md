@@ -59,7 +59,7 @@ the compiler will therefore reside under `/root/.jieli/toolchain`.
   These are linker/build budgets, not measured runtime stack or real-time headroom.
 - Host sequencer and motion tests passed. Optional TB-3PO upstream reference comparison
   was not compiled; full regression suite was not run for toolchain setup.
-- No hardware test or flashing performed.
+- This report covers toolchain setup; functional hardware testing is performed by the project owner.
 
 From PowerShell, rebuild with:
 

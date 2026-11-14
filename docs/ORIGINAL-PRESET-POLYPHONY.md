@@ -1,5 +1,7 @@
 # Original preset with polyphony — development 0.0.7
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Restores the user's preferred original FM6 TINE EP factory preset (index 0).
 Explicit V_POLY and the sustained overlapping playback from 0.0.5 remain.
 The factory sound is unchanged: its natural decay remains, and no operator

@@ -1,5 +1,7 @@
 # Local emulator and installer
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Run `tools/start-web.ps1` from PowerShell. It starts a hidden Node server,
 bound only to 127.0.0.1 on port 8010 (`-Port` chooses another port).
 

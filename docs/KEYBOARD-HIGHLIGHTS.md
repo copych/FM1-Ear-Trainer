@@ -1,5 +1,7 @@
 # Reference keyboard lights — development 0.0.8
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Keyboard keys light as the known exercise notes enter, stay lit while those notes
 are held and clear at note-off/cancellation. Hidden ending notes never drive the
 keyboard lights. Fully hidden exercises keep the entire keyboard dark during
@@ -37,7 +39,7 @@ the known note and after the hidden second enters, then zero after release.
 All-hidden four-note playback returns zero both during the first note and the
 sustained chord. Existing audio, MIDI answer, feedback, replay and reentry
 checks also pass. These test the simulator's actual firmware LED output; manual
-browser interaction/physical LEDs were not tested.
+browser interaction was outside that local check; physical game testing is performed by the owner.
 
 Target/build/ABI PASS: app 566640 B, package 668948 B (FM-1_900 development
 identity); upstream integrity, section, stack, size and package checks pass.

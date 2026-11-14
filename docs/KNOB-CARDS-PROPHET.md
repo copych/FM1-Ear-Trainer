@@ -1,5 +1,7 @@
 # Four-zone game screen and Prophet presets — 0.0.12
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 The top 48 rows contain four equal zones corresponding left-to-right to K1–K4:
 scale, hidden/total plus range, reserved K3, onset milliseconds. Keeping K3
 reserved preserves the established mapping until its role is chosen. The

@@ -1,5 +1,7 @@
 # Adaptive practice and scoring — development 0.0.3
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 For development 0.0.4 sequence controls, see [Sequence controls](SEQUENCE-CONTROLS.md).
 Scoring is now per completed sequence; the first wrong entry ends an attempt.
 
@@ -48,7 +50,7 @@ other degree remained above 688 occurrences. Native feedback PNG inspected.
 | Dependencies/licenses | PASS source: no new dependency/assets; GPL and Melodee attribution retained. |
 | Compatibility/package/recovery | Existing flash gates, image layout, loader and paired resources retained. No device writes. Physical old/new revisions and recovery UNVERIFIED. |
 | Host functionality | PASS focused native tests above; browser/package results below. Original full UI/peripheral/golden suites and sanitizers not rerun for this patch. |
-| Hardware real time | UNVERIFIED: user tested prior firmware, not this build. No CPU, underrun, latency, stack or soak measurements claimed. |
+| Hardware real time | Functional testing is performed by the owner. CPU, underrun, latency, stack and soak measurements are not recorded in this report. |
 
 Before hardware qualification: use a verified backup/recovery route, test both
 known FM-1 flash revisions, confirm wrong-repeat/held-key behavior on local and

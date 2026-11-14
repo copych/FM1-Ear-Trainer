@@ -1,5 +1,7 @@
 # Audible sustain — development 0.0.6
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Historical sound trial. Development 0.0.7 restores the user's preferred
 [original TINE EP with polyphony](ORIGINAL-PRESET-POLYPHONY.md).
 

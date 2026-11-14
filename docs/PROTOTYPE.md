@@ -1,5 +1,7 @@
 # Two-note Ear Trainer prototype
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Current development 0.0.8 highlights and validation: [Keyboard highlights](KEYBOARD-HIGHLIGHTS.md).
 Sound: [Original preset with polyphony](ORIGINAL-PRESET-POLYPHONY.md).
 Playback: [Sustained playback](SUSTAINED-PLAYBACK.md).

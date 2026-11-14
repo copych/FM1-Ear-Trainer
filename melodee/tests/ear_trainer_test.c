@@ -51,9 +51,13 @@ int main(void)
         fwrite(rgb,1,3,shot);
     }
     fclose(shot);
-    /* A wrong built-in key, replay same exercise, then correct target. */
+    /* The displayed reference is harmless and does not consume an attempt. */
     fm1_in.notes=1u<<7; audio_ms(10);
-    assert(ear.state==EAR_WRONG && ear.attempts==1 && ear.player==60);
+    assert(ear.state==EAR_ANSWER && !ear.attempts && !ear.entered && !ear.score);
+    fm1_in.notes=0;audio_ms(10);
+    /* A genuinely wrong built-in key, then replay and correct target. */
+    fm1_in.notes=1u;audio_ms(10);
+    assert(ear.state==EAR_WRONG && ear.attempts==1 && ear.player==53);
     save_screen("ear-wrong",RGB(148,32,42));
     fm1_in.notes=0; audio_ms(10);
     assert(ear.player==-1);
@@ -224,6 +228,10 @@ int main(void)
     ear_publish(EAR_CMD_NEXT);audio_ms(2600);
     fm1_in.notes=1u<<(ear.notes[1]-53u);audio_ms(10);fm1_in.notes=0;audio_ms(10);
     assert(ear.entered==1u && ear.attempts==1u);
+    uint32_t partial_score=ear.score;
+    midi_event(0x90u,0,ear.notes[0],100);midi_event(0x80u,0,ear.notes[0],0);
+    midi_event(0x90u,0,ear.notes[1],100);midi_event(0x80u,0,ear.notes[1],0);
+    assert(ear.state==EAR_ANSWER && ear.entered==1 && ear.attempts==1 && ear.score==partial_score);
     midi_event(0x90u,0,52,100);assert(ear.state==EAR_WRONG && ear.attempts==1u);
     midi_event(0x80u,0,52,0);serial=ear.serial;target=ear.target;
     audio_ms(3600);assert(ear.state==EAR_ANSWER && ear.serial==serial && ear.target==target && !ear.entered);
@@ -250,13 +258,23 @@ int main(void)
     uint32_t mask=0;for(uint32_t k=0;k<4;k++)mask|=1u<<(ear.notes[k]-53u);
     fm1_in.notes=mask;audio_ms(10);assert(ear.state==EAR_CORRECT && ear.entered==4);
     fm1_in.notes=0;audio_ms(10);
+    /* A full voicing may include the highlighted reference alongside targets. */
+    ear_settings.guess=3;ear_publish(EAR_CMD_NEXT);audio_ms(1500);
+    mask=0;for(uint32_t k=0;k<4;k++)mask|=1u<<(ear.notes[k]-53u);
+    fm1_in.notes=mask;audio_ms(10);
+    assert(ear.state==EAR_CORRECT && ear.entered==3 && ear.attempts==1);
+    fm1_in.notes=0;audio_ms(10);ear_settings.guess=4;
     /* Repeated MIDI messages cannot substitute for missing chord tones. */
     ear_publish(EAR_CMD_NEXT);audio_ms(1500);
     midi_event(0x90u,0,ear.notes[3],100);midi_event(0x90u,0,ear.notes[3],100);
     assert(ear.entered==1 && ear.state==EAR_ANSWER);
     midi_event(0x80u,0,ear.notes[3],0);midi_event(0x90u,0,ear.notes[3],100);
-    assert(ear.entered==1 && ear.state==EAR_WRONG);
+    assert(ear.entered==1 && ear.state==EAR_ANSWER && ear.attempts==1);
     midi_event(0x80u,0,ear.notes[3],0);
+    for(uint32_t k=0;k<3;k++) {
+        midi_event(0x90u,0,ear.notes[k],100);midi_event(0x80u,0,ear.notes[k],0);
+    }
+    assert(ear.state==EAR_CORRECT && ear.attempts==1 && ear.last_award>0);
     /* Sustained arpeggio: earlier gates stay open as each new note enters. */
     ear_settings.count=4;ear_settings.guess=1;ear_settings.gap=250;
     ear_publish(EAR_CMD_NEXT);audio_ms(10);

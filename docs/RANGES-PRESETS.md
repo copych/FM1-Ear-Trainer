@@ -1,5 +1,7 @@
 # Octave/full complexity and polyphonic presets — 0.0.10
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 K2 now has twenty positions: the ten hidden/total combinations (1/1 through
 4/4) in OCT, followed by the same ten in FULL. OCT spans C4–C5 in C major or
 A3–A4 in A natural minor, including both tonic octaves. FULL spans the built-in
@@ -54,7 +56,7 @@ and release gating remain active during the change.
 | Dependencies / includes / licenses | PASS: existing factory presets and loading APIs only; no dependency, header, asset or licence changes; notices retained. |
 | Compatibility / package / recovery | PASS for source/host gates: product FM-1_327008 and loader unchanged, MIDI and both flash-ID checks pass. Offline package/recovery checks required before publication. Physical new-build install/rollback UNVERIFIED. |
 | Host functional validation | PASS: game suite covers both ranges/scales, all twenty K2 positions forward/back/clamped, all 24 K3 presets and clamps, four simultaneous voice gates after mono-preset overrides, same-question replay, loading-window input lock, no duplicate award, selection on re-entry and cancellation. Existing scoring, lights, MIDI and UI suites pass. WASM/site checks recorded separately with the build logs. |
-| Hardware real-time validation | UNVERIFIED: no new-build device, timing/headroom, underrun, analog output or soak measurements. Earlier owner reports do not qualify this revision. |
+| Hardware real-time validation | Owner performs functional hardware testing. Quantitative timing/headroom, underrun, analog output and soak measurements are not recorded here. |
 
 Generator tests run 1000 four-note exercises for each scale/range, verifying
 complete eligible-note coverage, bounds, distinct pitches, both directions and

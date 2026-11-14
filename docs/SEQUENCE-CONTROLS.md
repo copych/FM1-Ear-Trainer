@@ -1,5 +1,7 @@
 # Sequence controls — development 0.0.4
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Historical timing description: development 0.0.5 replaces silent gaps with
 [sustained arpeggiated playback](SUSTAINED-PLAYBACK.md).
 

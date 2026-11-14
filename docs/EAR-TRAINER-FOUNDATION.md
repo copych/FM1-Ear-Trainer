@@ -6,7 +6,7 @@ Inspected and built 2026-11-08. No game implementation or device writes performe
 poly synth. A separate [eight-voice FM app](ear-trainer/README.md) now provides
 two-operator FM with Warm/Bright presets; target/host/web builds and focused tests pass. This
 supersedes the proposed requirement to integrate Melodee FM6 before proceeding.
-Hardware qualification remains pending, but host game development can continue.
+Historical foundation report. Current functional hardware testing is performed by the project owner; see [hardware testing status](HARDWARE-TESTING.md).
 
 ## Decision
 

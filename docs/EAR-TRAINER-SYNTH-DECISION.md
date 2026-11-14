@@ -1,5 +1,7 @@
 # Selected instrument: Melodee FM6
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 This decision supersedes the custom sine/triangle and two-operator FM experiments
 in `ear-trainer/`. Retain those as experiments; do not extend them for the game.
 

@@ -1,5 +1,7 @@
 # Firmware Hub submission preparation
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Destination: https://thefirmwarehub.com/submit/
 Submission contact: zven@thefirmwarehub.com (the site's published mail link).
 The site takes a submission by email; there is no account/form submission here.

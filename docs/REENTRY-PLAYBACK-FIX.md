@@ -1,5 +1,7 @@
 # Re-entry and two-note playback regression
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 2026-11-08. Responds to the reported web-emulator re-entry and single-note symptoms.
 
 ## Findings and changes

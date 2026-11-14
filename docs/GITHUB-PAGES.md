@@ -1,5 +1,7 @@
 # GitHub Pages publishing
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Project site: https://copych.github.io/FM1-Ear-Trainer/
 
 - Emulator: `emu/`
@@ -30,9 +32,7 @@ permission and a physical connection. Page viewing does not write a device.
 
 Packages use the dedicated identity from `project.json` (currently FM-1_327008).
 Earlier development packages used FM-1_900. Attestation proves build/source
-provenance, not hardware safety. Both physical revisions, worst-case real-time
-headroom and recovery remain UNVERIFIED. Existing native/WASM validation still
-does not replace device tests. No new firmware/DSP code is introduced by Pages.
+provenance. The project owner performs functional hardware testing; specific quantitative measurements are recorded in [hardware testing status](HARDWARE-TESTING.md). No new firmware/DSP code is introduced by Pages.
 
 ## Scope and validation
 

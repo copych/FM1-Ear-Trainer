@@ -32,7 +32,7 @@ with zipfile.ZipFile(recovery, "w", zipfile.ZIP_DEFLATED) as archive:
     archive.write(root / "melodee/docs/BOOT-SAFETY.md", "BOOT-SAFETY.md")
     for name in ("melodee.bin", "melodee.fwsc", "melodee-res.bin", "loader/ota.bin"):
         archive.write(root / "melodee/build" / name, f"build/{name}")
-    archive.writestr("README.txt", "Development build, not hardware-qualified. Back up your own device first.\n"
+    archive.writestr("README.txt", "FM-1 Ear Trainer recovery files. Back up your own device first.\n"
                       "See BOOT-SAFETY.md and tools/fm1_recover.py --help. Python source needs PyUSB/libusb for USB access.\n"
                       "Offline validation: python3 tools/fm1_recover.py build/melodee.fwsc --check\n"
                       "Recovery source is included; no device-specific backup is supplied.\n")

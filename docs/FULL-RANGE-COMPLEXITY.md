@@ -1,5 +1,7 @@
 # Full-range exercises and combined complexity — 0.0.9
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Each exercise now uses distinct MIDI pitches from the selected scale across the
 built-in F3–G5 keyboard (53–79). C major and A natural minor both use the white
 keys, with different tonic/degree labels and adaptive weighting. Octave-separated
@@ -48,7 +50,7 @@ inferred from these structural checks.
 | Dependencies / includes / licenses | PASS: no dependencies, headers or assets added; upstream notices retained. |
 | Compatibility / package / recovery | PASS for host/source gates: dedicated identity and loader unchanged; both flash-ID tests and offline package/chip-key/boundary/recovery-loader checks pass. New build's physical install/rollback remains UNVERIFIED. |
 | Host functional validation | PASS: native game/audio, UI, MIDI/flash, WASM audio/answers, browser control gestures, Hub metadata and served site/hash checks. |
-| Hardware real-time validation | UNVERIFIED: no new-build hardware testing, timing, headroom, underrun or soak measurements. Earlier 0.0.8 owner-reported tests do not qualify 0.0.9. |
+| Hardware real-time validation | Owner performs functional hardware testing. Timing, headroom, underrun and soak measurements are not recorded here. |
 
 Native regression covers all ten complexity pairs, forward/reverse/clamp control
 gestures, both scales, deterministic generation, and 1000 four-note exercises per

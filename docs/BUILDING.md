@@ -1,5 +1,7 @@
 # Build FM-1 Ear Trainer
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 The application source is vendored in `melodee/`, based on Melodee commit
 `165d177a425944f3d30b0b669255a6ed0050c3a5`. Upstream's build integrity and
 license checks remain enabled. See `melodee/BUILDING.md` for platform details.
@@ -42,12 +44,11 @@ available. Build outputs appear under `melodee/build/` and `build/site/`.
 
 ## Development packages and hardware
 
-Project builds use `project.json`: version 0.0.14 and dedicated `FM-1_327008`
+Project builds use `project.json`: version 0.0.15 and dedicated `FM-1_327008`
 identity. Earlier prototypes used shared `FM-1_900`. These development builds
-are not official Melodee releases or hardware-qualified builds. Back up the
+are independent Ear Trainer releases. Functional hardware testing is performed by the owner. Back up the
 actual unit and confirm its matching recovery procedure before installing.
-Both known flash IDs pass source/host checks; physical revision compatibility,
-worst-case CPU/stack headroom and recovery remain unverified.
+Both known flash IDs pass source/host checks. Recorded hardware coverage and quantitative measurements belong in [hardware testing status](HARDWARE-TESTING.md).
 
 Publishing source does not publish a firmware release. Firmware releases must
 follow `melodee/AGENTS.md` and its upstream attested build/recovery workflow.

@@ -1,5 +1,7 @@
 # Emulator button combinations
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 Use **Hold HOME**, then click another panel button (for example PLAY). HOME stays
 held between clicks and releases after the second button is released. Ordinary
 HOME taps on the drawn panel retain their momentary behavior, including exiting

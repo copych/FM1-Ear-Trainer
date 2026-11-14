@@ -1,5 +1,7 @@
 # PRESETS knob and persistent game preferences — 0.0.11
 
+Hardware functional testing is performed by the project owner. This technical record describes the checks and measurements available when written; see [current testing status](HARDWARE-TESTING.md).
+
 The printed PRESETS encoder now selects the 24 factory FM6 sounds during
 training. Every sound remains forced to poly mode, with the existing safe
 same-question replay and duplicate-award protection. K3 is reserved again.
@@ -72,7 +74,7 @@ retained; see BUILDING.md. No physical device writes were performed.
 | Dependencies / includes / licenses | PASS: no dependencies or external assets; existing browser localStorage only; upstream notices retained. |
 | Compatibility / package / recovery | PASS for host/source scope: legacy/current settings and musical-data preservation, truncated/corrupt input rejection, simulated interrupted A/B save/retry. Product/loader unchanged. Actual new-build install/rollback UNVERIFIED. |
 | Host functional validation | PASS: game/audio, UI, MIDI/flash, settings codec, simulated NOR persistence/origin, browser controls/localStorage, fresh-instance WASM restore and corrupt-record rejection. Package/site checks accompany the final build. |
-| Hardware real-time validation | UNVERIFIED: no device save/reboot, both-revision, timing, underrun, runtime memory or soak measurements for 0.0.11. Prior owner reports do not qualify this build. |
+| Hardware real-time validation | Owner performs functional hardware testing. Specific revision coverage, timing, underrun, runtime memory and soak measurements are not recorded here. |
 
 The persistence test round-trips every scale/range/count/guess/preset combination
 through PER5; checks malformed fields, all truncated lengths and single-bit CRC

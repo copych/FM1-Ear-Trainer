@@ -53,7 +53,13 @@ for (const [name,from,to] of [['first',.25,.4],['second',.5,.7]]) {
 }
 assert.equal(heard[0],60);assert(heard[1]!==60,'second note must have a different pitch');
 const waiting=screen();
-ex.web_keys(1<<7); run(40); // C4 cannot repeat as the target
+const waitingBg=bg();
+const initialRating=Array.from(new Uint8Array(ex.memory.buffer,ex.web_ear_ratings(),168));
+ex.web_keys(1<<7);run(40); // Playing known C4 leaves the hidden answer pending.
+assert.equal(bg(),waitingBg,'known reference leaves the normal background');
+assert.deepEqual(Array.from(new Uint8Array(ex.memory.buffer,ex.web_ear_ratings(),168)),initialRating);
+ex.web_keys(0);run(20);
+ex.web_keys(1);run(40); // F3 is neither reference nor target.
 const wrong=screen();
 assert(!waiting.equals(wrong), 'wrong answer must update feedback');
 function bg() { const s=screen();return (s[0]<<8)|s[1]; }

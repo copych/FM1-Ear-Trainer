@@ -82,3 +82,26 @@ vm.runInContext('storeEarSettings([])',context);
   browserStorage.set('fm1-ear-trainer.ratings.v1','[1,2]');
   assert.equal(vm.runInContext('readEarRatings()',context),null);
 console.log('Browser preferences PASS: real page save/reload, invalid JSON/length and unavailable storage');
+
+async function testGameStart() {
+  const beforeDevice=html.slice(html.indexOf('<main>'),html.indexOf('<div class="device"'));
+  assert.equal((beforeDevice.match(/<button\b/g)||[]).length,1,'only one button above the emulator');
+  assert(beforeDevice.includes('Start training'));
+  context.fetch=async()=>({arrayBuffer:async()=>new ArrayBuffer(8)});
+  context.AudioContext=class {constructor(){this.audioWorklet={addModule:async()=>{}};this.destination={};}async resume(){}};
+  context.AudioWorkletNode=class {constructor(){this.port={postMessage:m=>messages.push(m)};}connect(){}};
+  vm.runInContext('node=null',context);messages.length=0;
+  await ids.get('power').handlers.click[0]({});
+  assert.equal(messages.at(-1).type,'load','one click initializes audio and loads firmware');
+  vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(messages.at(-1).type,'ear');assert.equal(messages.at(-1).action,0,'first ready frame automatically starts training');
+  assert.equal(ids.get('power').disabled,true);
+  vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:true,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').textContent,'Training running');
+  vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').disabled,false,'HOME exit permits re-entry');
+  await ids.get('power').handlers.click[0]({});
+  assert.equal(messages.at(-1).type,'ear');assert.equal(messages.at(-1).action,0);
+  console.log('Game start PASS: one top button, audio boot, automatic entry and re-entry after HOME');
+}
+testGameStart().catch(error=>{console.error(error);process.exitCode=1;});

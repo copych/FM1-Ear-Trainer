@@ -10,7 +10,8 @@ Project site: https://copych.github.io/FM1-Ear-Trainer/
 - Backup/editor: `webapp/editor/`
 - Exact package/resource/WASM hashes, source commit and workflow run: `build-info.json`
 
-`.github/workflows/pages.yml` runs on main pushes or manual dispatch. It calls
+`.github/workflows/pages.yml` runs on main and `feature-metronome-training-games`
+pushes or manual dispatch. It calls
 the mandated `zvenson/fm1-build/.github/workflows/build.yml@v1` to build target
 firmware and Emscripten 3.1.69 emulator from that commit. Native game, upstream UI,
 MIDI/flash, WASM and package/recovery checks block publication. The site is tested
@@ -20,9 +21,39 @@ The shared workflow attests the package, paired resources, source recovery ZIP,
 and complete site archive. Deployment checks their SHA-256 and attestations,
 requires the reviewed signer workflow and current source digest, then checks that
 the extracted site's firmware/resources match the attested files byte for byte.
-Only then does the official Pages action publish the site. Actions are pinned to
+After verification it uploads a `verified-site` artifact. Only main runs deploy
+that artifact to the project Pages site; feature builds never replace main.
+Actions are pinned to
 commit SHAs; the reviewed shared build remains at v1. No tag/GitHub Release is
 created by this workflow.
+
+## Metronome branch installer
+
+Branch: `feature-metronome-training-games` (the earlier slash-separated name was
+renamed). Local entry: `http://127.0.0.1:8012/webapp/installer/` after running
+`sh tools/build-melodee.sh site` and serving `build/site`. The installer banner
+and `build-info.json` identify the branch and source revision. The local
+development package remains distinct from an attested hosted build.
+
+The separate `copych/copych.github.io` repository hosts the checked branch site
+under `feature-metronome-training-games/`; the installer path is
+`https://copych.github.io/feature-metronome-training-games/webapp/installer/`.
+The source of that directory is the `verified-site` artifact from a successful
+feature-branch build and attestation verification, including paired resources,
+emulator, backup editor, guide, licenses and recovery ZIP. Its source revision
+and package hashes must match the verified run before publishing.
+
+The user-site "Deploy all branches" workflow only exports branches of
+`copych.github.io` itself. It does not fetch or build branches of FM1-Ear-Trainer.
+Publishing raw firmware source therefore cannot create an installer: generated
+HTML, WASM, firmware and resources must be assembled and verified first.
+
+Hosting-only compliance: runtime DSP/ownership/ABI/storage semantics are
+unchanged. The existing SDK/toolchain, host tests, package/recovery and signer
+verification gates remain mandatory. Branch metadata and served package hashes
+are checked by `tools/check-site.cjs`; local and hosted verification must be
+reported separately. Physical flash/recovery and hardware timing were not
+performed as part of this installer/hosting work.
 
 The published recovery ZIP includes matching development images, original RAM
 loader, recovery Python sources and licenses; it is not a backup of your device

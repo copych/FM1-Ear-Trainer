@@ -1,8 +1,11 @@
 """Assemble the Ear Trainer site using Melodee's checked installer builder."""
 from pathlib import Path
 import hashlib
+import html
 import json
+import os
 import shutil
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +13,13 @@ FW = ROOT / "melodee"
 OUT = ROOT / "build/site"
 PROJECT = json.loads((ROOT / "project.json").read_text())
 SITE_VERSION = PROJECT["version"]
+def git_read(*args):
+    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+
+SOURCE_BRANCH = os.environ.get("GITHUB_REF_NAME") or git_read("branch", "--show-current") or "detached"
+SOURCE_REVISION = os.environ.get("GITHUB_SHA") or git_read("rev-parse", "HEAD")
+SOURCE_REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "copych/FM1-Ear-Trainer")
+SOURCE_DIRTY = bool(git_read("status", "--porcelain"))
 sys.path.insert(0, str(FW / "web"))
 import make_site
 
@@ -34,8 +44,10 @@ page = page.replace("Synths, sequencing and effects for the FM-1, installed over
                     "Ear training with Melodee FM6 and Prophet sounds, installed over USB from this page.")
 page = page.replace('<a class="brand" href="../editor/">Melodee</a>',
                     '<a class="brand" href="../../">Ear Trainer</a>')
-banner = '''<aside style="padding:14px 20px;background:#242126;color:#fff;text-align:center;font:15px/1.5 system-ui">
+banner = f'''<aside style="padding:14px 20px;background:#242126;color:#fff;text-align:center;font:15px/1.5 system-ui">
 <strong>FM-1 Ear Trainer</strong><br>
+Branch installer: <strong>{html.escape(SOURCE_BRANCH)}</strong><br>
+Source: <a style="color:#ffb58a" href="https://github.com/{html.escape(SOURCE_REPOSITORY, quote=True)}/tree/{html.escape(SOURCE_REVISION, quote=True)}">{html.escape(SOURCE_REVISION[:12])}</a>{" (local working tree)" if SOURCE_DIRTY else ""}<br>
 After installing, stop playback, hold HOME and press PLAY to open the training menu.
 Choose pitch training, metronome, keep tempo or missing beats; press PLAY to begin.
 <a style="color:#ffb58a" href="../../emu/">Try the emulator</a> ·
@@ -61,6 +73,8 @@ digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 manifest = {
     "name": "FM-1 Ear Trainer", "channel": "development",
     "version": SITE_VERSION,
+    "sourceBranch": SOURCE_BRANCH, "sourceRevision": SOURCE_REVISION,
+    "sourceRepository": SOURCE_REPOSITORY, "sourceDirty": SOURCE_DIRTY,
     "baseRevision": "165d177a425944f3d30b0b669255a6ed0050c3a5",
     "product": make_site.product_of((FW / "build/melodee.fwsc").read_bytes()),
     "files": {name: digest(OUT / name) for name in

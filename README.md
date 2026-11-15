@@ -6,7 +6,7 @@ Turn SELECT (or K1) to choose **Pitch training**, **Metronome**, **Keep tempo**,
 
 Listen to the notes, then play the hidden ones on the keyboard—in any order, separately or together. Highlighted notes are safe to play again while you work out the rest.
 
-**[Try it in your browser](https://copych.github.io/FM1-Ear-Trainer/emu/)** · **[Install on your FM-1](https://copych.github.io/FM1-Ear-Trainer/webapp/installer/)** · [Full guide](https://copych.github.io/FM1-Ear-Trainer/webapp/manual/)
+**[Try this branch in your browser](https://copych.github.io/feature-metronome-training-games/emu/)** · **[Install this branch on your FM-1](https://copych.github.io/feature-metronome-training-games/webapp/installer/)** · [Branch guide](https://copych.github.io/feature-metronome-training-games/webapp/manual/) · [Main version](https://copych.github.io/FM1-Ear-Trainer/)
 
 ![Listen and find the hidden note](docs/images/guess.png) ![Correct answer](docs/images/correct.png) ![Four-note exercise](docs/images/four-notes.png)
 
@@ -49,6 +49,6 @@ Set 30–300 BPM, choose among 19 meters/groupings (including 5, 7, 11, 13 and 1
 
 **Keep tempo:** one audible count-in bar, then eight bars alternating one guide bar with your chosen number of silent bars. Tap every silent beat. **Missing beats:** tap the second, fourth, sixth… meter beats while the other beats play. In 1/4, tap every scored beat. Games use the meter’s denominator beats; rhythm patterns/subdivisions apply to free practice. BPM always counts quarter notes.
 
-Results show a timing-weighted score, hits, misses, extra taps, mean absolute error, signed early/late bias and timing consistency (SD). Game visuals hide the pulse after count-in. The browser aligns captured taps with the audio output clock automatically when supported; ALGORITHM adds a manual input correction (start at 0 ms). Use wired audio for consistent timing. See the [metronome guide](https://copych.github.io/FM1-Ear-Trainer/webapp/manual/#metronome) for details. Device settings save after leaving the screen; browser settings and user slots are remembered locally. Round results are session-only.
+Results show a timing-weighted score, hits, misses, extra taps, mean absolute error, signed early/late bias and timing consistency (SD). Game visuals hide the pulse after count-in. The browser aligns captured taps with the audio output clock automatically when supported; ALGORITHM adds a manual input correction (start at 0 ms). Use wired audio for consistent timing. See the [metronome guide](https://copych.github.io/feature-metronome-training-games/webapp/manual/#metronome) for details. Device settings save after leaving the screen; browser settings and user slots are remembered locally. Round results are session-only.
 
 Built on [Melodee](https://github.com/keremimo/melodee), with FM6 and Prophet sounds. [GPL-3.0](LICENSE) · [Component licences](melodee/LICENSING.md) · [Development docs](docs/DEVELOPMENT.md). Independent project; not affiliated with M-VAVE.

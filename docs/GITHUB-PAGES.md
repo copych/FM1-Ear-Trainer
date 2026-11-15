@@ -43,6 +43,16 @@ feature-branch build and attestation verification, including paired resources,
 emulator, backup editor, guide, licenses and recovery ZIP. Its source revision
 and package hashes must match the verified run before publishing.
 
+Initial hosted metronome site: source `1982e644a4330aed660e003eef2ff44106b2b3f7`,
+verified [build run](https://github.com/copych/FM1-Ear-Trainer/actions/runs/43756617716),
+hosting commit `32e5a7bee3ab8a6b1b10b8c05df207f8b86eae71`, and successful
+[Pages run](https://github.com/copych/copych.github.io/actions/runs/43757564706).
+The public installer, emulator, guide, editor, package and resource URLs were
+retrieved and their manifest hashes verified after deployment. The local
+installer at port 8012 was checked separately. Hosting guards were also tested
+to reject damaged resources and unverified local builds. This records the
+installed source snapshot; later README-only commits do not change its binary.
+
 The user-site "Deploy all branches" workflow only exports branches of
 `copych.github.io` itself. It does not fetch or build branches of FM1-Ear-Trainer.
 Publishing raw firmware source therefore cannot create an installer: generated

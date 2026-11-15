@@ -4,7 +4,7 @@
 
 Listen to the notes, then play the hidden ones on the keyboard—in any order, separately or together. Highlighted notes are safe to play again while you work out the rest.
 
-**[Try it in your browser](https://copych.github.io/FM1-Ear-Trainer/emu/)** · **[Install on your FM-1](https://copych.github.io/FM1-Ear-Trainer/webapp/installer/)** · [Full guide](https://copych.github.io/FM1-Ear-Trainer/webapp/manual/)
+**[Try it in your browser](https://copych.github.io/FM1-Ear-Trainer/feature-metronome-training-games/emu/)** · **[Install on your FM-1](https://copych.github.io/FM1-Ear-Trainer/feature-metronome-training-games/webapp/installer/)** · [Full guide](https://copych.github.io/FM1-Ear-Trainer/webapp/manual/)
 
 ![Listen and find the hidden note](docs/images/guess.png) ![Correct answer](docs/images/correct.png) ![Four-note exercise](docs/images/four-notes.png)
 

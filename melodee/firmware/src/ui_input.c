@@ -473,6 +473,8 @@ static void ui_leds(void)
     if(ear_enabled) {
         c=ear_ui_key_lights();play=0;pdim=0;pbr=0;
     }
+    if(metro_enabled) {c=fm1_in.notes;play=0;pdim=0;pbr=0;}
+    if(training_menu_open) {c=0;play=0;pdim=0;pbr=0;}
     for (k = 0; k < 27u; k++) {
         uint32_t lv = play ? play_key_led(TSEL, k) : KL_OFF;   /* playing: the layout, MIDI's notes too (LIGHTS) */
         led_put(nl, 14u + k, (int)(((c >> k) & 1u) || lv == KL_ON));
@@ -2187,6 +2189,8 @@ static void ui_input(void)
         boot_work_input(pressed);
         return;
     }
+    if (training_ui_input(pressed)) return;
+    if (metro_ui_input(pressed)) return;
     if (ear_ui_input(pressed)) return;
     if(ui.import_refresh){pop.on=0;brw.on=0;ui.import_refresh=0;ui.force=1;}
     if (song_picker.active && song_picker.epoch != pattern_epoch) song_preset_cancel();

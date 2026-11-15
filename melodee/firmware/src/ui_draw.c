@@ -1284,6 +1284,8 @@ static void ui_draw_frame(void)
         if (ui.force) { boot_work_draw(); ui.force = 0; }
         return;
     }
+    if (training_menu_open) { training_ui_draw(); return; }
+    if (metro_enabled) { metro_ui_draw(); return; }
     if (ear_enabled) { ear_ui_draw(); return; }
     if (!scr_frame()) return;
     if (ui.waiting_shown != head_shared_status()) {

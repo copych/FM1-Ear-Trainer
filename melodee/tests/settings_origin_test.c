@@ -30,8 +30,12 @@ static int defaults(void)
         !memcmp(&panel, &PANEL_DEFAULT, sizeof panel) && !template_used() && !template_old();
     for (uint32_t k = 0; k < 4u; k++) ok &= settings_glo[k] == GP[GLO_KEPT[k]].def;
     for (uint32_t i = 0; i < sizeof favorites; i++)
-        if ((i < 60u || i >= 64u) && (i < 40u || i >= 52u))
+        if ((i < 60u || i >= 64u) && (i < 40u || i >= 52u) &&
+            (i < 14u*32u+4u || i >= 14u*32u+16u) &&
+            (i < 4u*32u+8u || i >= 5u*32u) && (i < 13u*32u+8u || i >= 14u*32u))
             ok &= !((const uint8_t *)&favorites)[i]; /* owner/EAR records aren't preset favorites */
+    ok &= metro_settings.bpm==120u && metro_settings.mode==METRO_PRACTICE;
+    for(uint32_t k=0;k<METRO_USER_COUNT;k++)ok &= !metro_user[k].bpm;
     return ok && !favorites_user_hi && ear_settings.scale==EAR_MAJOR &&
         ear_settings.range==EAR_RANGE_OCTAVE && ear_settings.count==2 && ear_settings.guess==1 &&
         ear_settings.gap==250 && !ear_settings.preset;

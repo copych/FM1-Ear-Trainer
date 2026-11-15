@@ -19,6 +19,12 @@ case "${1:-target}" in
              cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src tests/ear_trainer_test.c -lm -o build/ear-baseline/ear_test
              build/ear-baseline/ear_test
              exec python3 ../tools/ear-artifacts.py ;;
+  metro-test) mkdir -p build/ear-baseline
+              cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src tests/metronome_test.c -lm -o build/ear-baseline/metronome_test
+              exec build/ear-baseline/metronome_test ;;
+  training-test) mkdir -p build/ear-baseline
+                 cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src tests/training_ui_test.c -lm -o build/ear-baseline/training_ui_test
+                 exec build/ear-baseline/training_ui_test ;;
   input-test) mkdir -p build/ear-baseline
               cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src tests/midi_control_test.c -lm -o build/ear-baseline/midi_control_test
               build/ear-baseline/midi_control_test
@@ -26,11 +32,12 @@ case "${1:-target}" in
               exec build/ear-baseline/flash_id_test ;;
   web) exec sh web/emu/build.sh ;;
   settings-test) mkdir -p build/ear-baseline
-                 for suite in ear_persistence_test settings_test persistence_test settings_origin_test; do
+                 for suite in ear_persistence_test metronome_persistence_test settings_test persistence_test settings_origin_test; do
                    cc -O1 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src "tests/$suite.c" -lm -o "build/ear-baseline/$suite"
                    "build/ear-baseline/$suite"
                  done ;;
-  web-test) exec sh ../tools/node-wsl.sh ../tools/ear-web-smoke.mjs ;;
+  web-test) sh ../tools/node-wsl.sh ../tools/ear-web-smoke.mjs
+            exec sh ../tools/node-wsl.sh ../tools/metronome-web-smoke.mjs ;;
   site) exec python3 ../tools/prepare-web.py ;;
-  *) echo 'usage: build-melodee.sh [target|host|ui-test|game-test|input-test|settings-test|web|web-test]' >&2; exit 2 ;;
+  *) echo 'usage: build-melodee.sh [target|host|ui-test|game-test|metro-test|training-test|input-test|settings-test|web|web-test|site]' >&2; exit 2 ;;
 esac

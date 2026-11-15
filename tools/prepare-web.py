@@ -36,7 +36,8 @@ page = page.replace('<a class="brand" href="../editor/">Melodee</a>',
                     '<a class="brand" href="../../">Ear Trainer</a>')
 banner = '''<aside style="padding:14px 20px;background:#242126;color:#fff;text-align:center;font:15px/1.5 system-ui">
 <strong>FM-1 Ear Trainer</strong><br>
-After installing, stop playback, hold HOME and press PLAY to start training.
+After installing, stop playback, hold HOME and press PLAY to open the training menu.
+Choose pitch training, metronome, keep tempo or missing beats; press PLAY to begin.
 <a style="color:#ffb58a" href="../../emu/">Try the emulator</a> ·
 <a style="color:#ffb58a" href="../../">Home</a></aside>'''
 page = page.replace("<body>", "<body>" + banner, 1)

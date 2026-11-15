@@ -17,6 +17,9 @@
  * plays are recorded, not the keys held (what plays back is what was heard). A key or MIDI note plays a
  * chord when the track's CHRD is on (chord.c): its notes go through the same input as so many keys. */
 #define KB_SILENT 255u
+/* Main publishes menu visibility under the existing IRQ mask. Audio keeps
+ * tracking held keys/MIDI, but the training chooser never sounds notes. */
+static volatile uint8_t training_menu_open;
 #include "ear_trainer.c"
 static volatile uint8_t kb_asleep;
 static uint32_t kb_prev;
@@ -837,6 +840,11 @@ static __attribute__((noinline)) void kb_lat(uint32_t k)
 static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch, k;
+    if(training_menu_open) {ear_keys=cur;kb_prev=cur;return;}
+    if (metro_enabled) {
+        if(cur&~ear_keys)metro_tap();
+        ear_keys=cur;kb_prev=cur;return;
+    }
     if (ear_enabled) { ear_keyboard(cur); kb_prev=cur; return; }
     ear_keys=cur;
     ch = cur ^ kb_prev;                           /* keys also sound while entering steps */
@@ -1474,6 +1482,7 @@ static void events_block(uint32_t n)
         t->armp = t->p[P_AMODE];
         t->aholdp = t->p[P_AHOLD];
     }
+    metro_commands();
     ear_audio_tick(n);
     audition_tick(n);
     keyboard_block();
@@ -1494,7 +1503,7 @@ static void events_block(uint32_t n)
         if (midi_render_timed && (int32_t)(time - midi_render_time) > 0)
             break;
         mi_r++;midi_dispatch_left--;
-        if (ear_enabled && status>=0xF0u) continue;
+        if ((ear_enabled || metro_enabled || training_menu_open) && status>=0xF0u) continue;
         if (status == 0xF2u) {
             if (selected_clock == source) midi_clock_position(d1 | d2 << 7);
         } else if (status >= 0xF8u) {

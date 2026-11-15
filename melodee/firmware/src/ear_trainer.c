@@ -260,18 +260,21 @@ static void ear_source_lost(uint32_t source);
  * Generated playback never enters this raw input path. */
 static int ear_midi(uint32_t st,uint32_t ch,uint32_t note,uint32_t vel,uint32_t source)
 {
-    if (source>3u || ch>=16u || note>=128u) return ear_enabled;
+    if (source>3u || ch>=16u || note>=128u) return ear_enabled || metro_enabled || training_menu_open;
     uint32_t *bits=&ear_midi_keys[source][ch][note>>5], bit=1u<<(note&31u), was=*bits&bit;
     if(st==0x90u && vel) {
         *bits|=bit;
         if(!was) ear_down[source]++;
-        if(ear_enabled && !was) ear_player_press(note);
+        if(!training_menu_open) {
+            if(metro_enabled && !was)metro_tap();
+            else if(ear_enabled && !was) ear_player_press(note);
+        }
     } else if(st==0x80u || (st==0x90u && !vel)) {
         *bits&=~bit;
         if(was) ear_down[source]--;
         if(ear_enabled) ear_player_release(note);
     } else if(st==0xB0u && (note==120u || note==123u)) ear_source_lost(source);
-    return ear_enabled;
+    return ear_enabled || metro_enabled || training_menu_open;
 }
 static void ear_source_lost(uint32_t source)
 {

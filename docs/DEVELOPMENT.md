@@ -6,6 +6,7 @@ Player instructions: [README](../README.md) and [guide](https://copych.github.io
 - [GitHub Pages publication and provenance](GITHUB-PAGES.md)
 - [Rating, unordered matching and persistence](RATING-UNORDERED-ANSWERS.md)
 - [Highlighted-note handling and documentation update](HIGHLIGHTED-NOTES.md)
+- [Metronome, rhythm games and validation](METRONOME.md)
 - [Porting boundaries](PORTING.md)
 - [Hardware testing and documentation status](HARDWARE-TESTING.md)
 

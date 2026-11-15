@@ -12,6 +12,7 @@ class Element {
   closest(){return null;}
   getContext(){return {createImageData:()=>({data:new Uint8ClampedArray(240*240*4)}),putImageData(){}};}
   fire(name,values={}){for(const callback of this.handlers[name]??[]) callback({preventDefault(){},target:this,...values});}
+  click(){this.fire('click');}
 }
 const ids=new Map(),events=new Element(),messages=[];
 const timers=new Map();let nextTimer=0;
@@ -85,7 +86,7 @@ console.log('Browser preferences PASS: real page save/reload, invalid JSON/lengt
 
 async function testGameStart() {
   const beforeDevice=html.slice(html.indexOf('<main>'),html.indexOf('<div class="device"'));
-  assert.equal((beforeDevice.match(/<button\b/g)||[]).length,1,'only one button above the emulator');
+  assert.equal((beforeDevice.match(/<button\b/g)||[]).length,1,'one shared Ear Trainer entry');
   assert(beforeDevice.includes('Start training'));
   context.fetch=async()=>({arrayBuffer:async()=>new ArrayBuffer(8)});
   context.AudioContext=class {constructor(){this.audioWorklet={addModule:async()=>{}};this.destination={};}async resume(){}};
@@ -94,14 +95,20 @@ async function testGameStart() {
   await ids.get('power').handlers.click[0]({});
   assert.equal(messages.at(-1).type,'load','one click initializes audio and loads firmware');
   vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:false,keys:0,buttons:0}})',context);
-  assert.equal(messages.at(-1).type,'ear');assert.equal(messages.at(-1).action,0,'first ready frame automatically starts training');
+  assert.equal(messages.at(-1).type,'training','first ready frame opens the training menu');
   assert.equal(ids.get('power').disabled,true);
-  vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:true,keys:0,buttons:0}})',context);
+  vm.runInContext('node.port.onmessage({data:{type:"frame",trainingActive:true,trainingMenu:true,earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').textContent,'Choose an activity');
+  vm.runInContext('node.port.onmessage({data:{type:"frame",trainingActive:true,earActive:true,keys:0,buttons:0}})',context);
   assert.equal(ids.get('power').textContent,'Training running');
   vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:false,keys:0,buttons:0}})',context);
   assert.equal(ids.get('power').disabled,false,'HOME exit permits re-entry');
   await ids.get('power').handlers.click[0]({});
-  assert.equal(messages.at(-1).type,'ear');assert.equal(messages.at(-1).action,0);
-  console.log('Game start PASS: one top button, audio boot, automatic entry and re-entry after HOME');
+  assert.equal(messages.at(-1).type,'training');
+  vm.runInContext('node.port.onmessage({data:{type:"frame",metroActive:true,earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').disabled,true);
+  vm.runInContext('node.port.onmessage({data:{type:"frame",metroActive:false,earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').disabled,false);
+  console.log('Activity start PASS: one shared entry, audio boot, training menu state, mutual exclusion and re-entry after HOME');
 }
 testGameStart().catch(error=>{console.error(error);process.exitCode=1;});

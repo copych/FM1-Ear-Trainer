@@ -29,6 +29,12 @@ class Melodee extends AudioWorkletProcessor {
         ex.web_ear_ratings_restore();
       }
       this.earScores="";
+      if(Array.isArray(m.metroSettings) && m.metroSettings.length===60 &&
+          m.metroSettings.every(v=>Number.isInteger(v) && v>=0 && v<=255)) {
+        new Uint8Array(ex.memory.buffer,ex.web_metro_settings(),60).set(m.metroSettings);
+        ex.web_metro_settings_restore();
+      }
+      this.metroPrefs="";
       this.mem = ex.memory;
       this.sentFb = -1;
       this.last = 0;
@@ -38,7 +44,9 @@ class Melodee extends AudioWorkletProcessor {
     const ex = this.ex;
     if (!ex) return;
     if (m.type === "keys") ex.web_keys(m.mask >>> 0);
+    else if (m.type === "training") this.port.postMessage({type:"training-result",accepted:!!ex.web_training_open()});
     else if (m.type === "ear") this.port.postMessage({type:"ear-result", accepted:!!ex.web_ear_action(m.action)});
+    else if (m.type === "metro") this.port.postMessage({type:"metro-result", accepted:!!ex.web_metro_action(m.action)});
     else if (m.type === "buttons") ex.web_buttons(m.mask >>> 0);
     else if (m.type === "encoder") ex.web_encoder(m.id, m.n | 0);
     else if (m.type === "master") ex.web_master(m.value | 0);
@@ -61,6 +69,12 @@ class Melodee extends AudioWorkletProcessor {
     if (currentTime - this.last >= 1 / 30) {
       this.last = currentTime;
       const msg = { type: "frame", ms: ex.web_now(), keys: ex.web_led_keys() >>> 0, buttons: ex.web_led_buttons() >>> 0, earActive:!!ex.web_ear_active() };
+      msg.metroActive=!!ex.web_metro_active();
+      msg.trainingActive=!!ex.web_training_active();msg.trainingMenu=!!ex.web_training_menu();
+      if(msg.metroActive)msg.metroStats=Array.from({length:9},(_,k)=>ex.web_metro_metric(k));
+      const metroPrefs=Array.from(new Uint8Array(this.mem.buffer,ex.web_metro_settings(),60));
+      const metroKey=metroPrefs.join(",");
+      if(metroKey!==this.metroPrefs) {this.metroPrefs=metroKey;msg.metroSettings=metroPrefs;}
       const prefs = Array.from(new Uint8Array(this.mem.buffer, ex.web_ear_settings(), 12));
       const key = prefs.join(",");
       if (key !== this.earPrefs) { this.earPrefs = key; msg.earSettings = prefs; }

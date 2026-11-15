@@ -18,6 +18,8 @@
  *   row 1 bytes 8..19 hold Ear Trainer preferences (EAR version 1 + CRC8); 20..23 MIDI knobs,
  *         24..27 tagged CLICK LEVEL (CK + version 1 + percent; FX RATE's FQ until 1.2);
  *         28..31 mark validated Melodee settings (MDS + version 1).
+ * Metronome: row 14 bytes 4..15 current settings; retired SAMPLE/SLICE rows
+ * 4/13 bytes 8..31 four user presets. SLICE stays disabled in this build.
  * Rows 1 (DIGITAL, retired), 4 (SAMPLE) and 13 (SLICE, built with MELODEE_SLICE) may hold Felucca 1.0's stars; 6, 7, 9 are LEGACY_EXTRAS' engines. Native FM6 slots: row 12 bits 24..87. */
 typedef struct {
     uint8_t factory[16][32]; /* engine 0..15, preset 0..255 */

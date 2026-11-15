@@ -1305,3 +1305,5 @@ static uint32_t text_lines(const char *s, char (*l)[32], uint32_t m, int32_t w, 
 }
 #include "ui_boot.c"                            /* visible progress before boot flash maintenance */
 #include "ear_ui.c"
+#include "metronome_ui.c"
+#include "training_ui.c"

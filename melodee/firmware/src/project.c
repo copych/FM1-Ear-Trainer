@@ -1657,6 +1657,9 @@ static void settings_poll_inner(void)
 
 static void settings_poll(void)
 {
+    /* Flash writes halt sound on FM-1. Keep the metronome's clock and games
+     * uninterrupted, including when stopped on its screen; commit on exit. */
+    if(metro_enabled)return;
 #if MELODEE_FLASH && defined(MELODEE_EAR_TRAINER)
     /* Main-only checkpoint, at most once per minute while practicing. Exit
      * drains it on the next idle poll. Existing A/B and quiet guards apply. */

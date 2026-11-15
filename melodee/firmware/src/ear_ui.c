@@ -34,6 +34,7 @@ static void ear_ui_load_preset(uint32_t cmd)
 }
 static int ear_ui_start(void)
 {
+    if(metro_enabled)return 0;
     if(ear_enabled) { ear_publish(EAR_CMD_RETRY); return 1; }
     if(song.playing || transport_busy() || boot_work.state) return 0;
     ear_saved_sel=song.sel;

@@ -5,6 +5,7 @@
 /* Engine output -> optional stereo insert -> track level -> master.
  * The bypass retains the original level/pan/spread path exactly. */
 #include "fx.c"
+#include "metronome.c"
 static int32_t part_storage[CTL],mix_l[CTL],mix_r[CTL];
 static int32_t *part_buf=part_storage;
 static uint8_t fx_send_on;
@@ -333,7 +334,7 @@ static __attribute__((noinline,section(".dsp_text"))) void master_samples(int32_
     punch_process(mix_l,mix_r,n);
     /* Attenuate the finished output: punch history, freeze and the DC blocker
      * keep running at unity, so even an already sounding tail follows MASTER. */
-    for(uint32_t i=0;i<n;i++){int32_t l=mix_l[i],r=mix_r[i];master_out(&l,&r);
+    for(uint32_t i=0;i<n;i++){int32_t click=metro_sample();int32_t l=mix_l[i]+click,r=mix_r[i]+click;master_out(&l,&r);
 #if MELODEE_USB_AUDIO
         if(master_capture_on){track_capture[2u*i]=l;track_capture[2u*i+1u]=r;}   /* (USB stereo capture: before MASTER, #103) */
 #endif

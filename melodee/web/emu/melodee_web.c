@@ -45,6 +45,19 @@ EXPORT(web_keys) void web_keys(uint32_t m)
     host_notes |= m & ~fm1_in.notes;
     fm1_in.notes = m;
 }
+/* Called on the same AudioWorklet thread as rendering. Submit key edges now
+ * so a short down/up between render quanta is not lost or double-counted by
+ * keyboard_block. Pitch training retains its original collected input path. */
+EXPORT(web_keys_at) void web_keys_at(uint32_t m,uint32_t at)
+{
+    if(metro_enabled) {
+        if(!training_menu_open && (m&~fm1_in.notes))metro_tap_at(at);
+        ear_keys=m;
+    }
+    web_keys(m);
+}
+EXPORT(web_metro_latency) void web_metro_latency(uint32_t samples)
+{metro.input_grace=samples>FS*2u?FS*2u:samples;}
 EXPORT(web_buttons) void web_buttons(uint32_t m)
 {
     host_pressed |= m & ~fm1_in.buttons;
@@ -64,6 +77,13 @@ EXPORT(web_master) void web_master(uint32_t v)        /* the MASTER knob, 0..102
 EXPORT(web_midi_in) void web_midi_in(uint32_t st, uint32_t d1, uint32_t d2)
 {
     midi_in_q[mi_w++ % MQ] = (st >> 4) | (st & 0xFFu) << 8 | (d1 & 0x7Fu) << 16 | (d2 & 0x7Fu) << 24;
+}
+EXPORT(web_midi_at) void web_midi_at(uint32_t st,uint32_t d1,uint32_t d2,uint32_t at)
+{
+    if(metro_enabled && st<0xF0u) {
+        (void)ear_midi_at(st&0xF0u,st&15u,d1,d2,1u,at);return;
+    }
+    web_midi_in(st,d1,d2);
 }
 
 /* the LEDs back by id (0..13 buttons, 14..40 keys), lit ones only (not the dim planes) */

@@ -3,6 +3,60 @@
 The player controls are in the root README and `web/guide/index.html#metronome`.
 This is a development patch, not a hardware-qualified release.
 
+## Browser tap-timing correction
+
+A second reproduced defect ignored note keys after SELECT or another knob
+held focus. Note-letter input now works with slider focus; the knob retains
+its arrow keys and real select/text fields remain protected. The page input
+regression failed before this change and passes after it.
+
+The original browser path graded keys against the firmware render clock rather
+than the sound reaching the player. The new actual-AudioWorklet/WASM regression
+reproduced the reported result exactly: with 120 ms simulated output delay,
+eight on-time computer-key taps produced 0 hits, 16 misses and 8 extras. The
+corrected path produces 8 hits, 8 misses and 0 extras; a full sixteen-tap round
+produces 16/16. Both keep-tempo and missing-beat games are exercised. A separate
+case still rejects genuinely 90 ms-late taps outside the 60 ms matching window.
+
+The page captures pointer/keyboard/MIDI event timestamps and maps them using
+the standard [Web Audio output timestamp](https://webaudio.github.io/web-audio-api/#dom-audiocontext-getoutputtimestamp).
+When unavailable, it estimates timing from base/output latency. Render-to-output
+clock differences are used only as a conservative message-delivery budget,
+not as a calibrated physical latency measurement. The worklet maps the audible
+AudioContext timeline to the first actual firmware output frame; delayed delivery
+does not become player timing error. A bounded output-delay + 250 ms grace
+(at most two seconds) postpones miss/result finalization without widening the
+matching window. This runtime field is zero on hardware and is not serialized.
+
+Timestamped browser key edges submit immediately on the AudioWorklet thread,
+so down/up messages between render quanta are neither lost nor counted twice.
+MIDI reuses the same source/channel/pitch ownership collector with an explicit
+input time. Native keyboard/MIDI wrappers retain the sample-clock path. Missed
+targets have a separate state so an expired target cannot later count as a hit
+and a miss together. With no matched taps, browser results report unavailable
+timing instead of misleading 0 ms precision; the header says Round finished.
+
+Regression: `tools/rhythm-input-test.mjs` executes the real worklet source and
+WASM using simulated 120/200/350 ms speaker delays, local keys, MIDI, short
+presses, both games and out-of-window errors. `tools/emu-controls-test.cjs`
+checks event-to-output clock mapping, fallback and zero-hit presentation.
+Both are included in the existing blocking browser test path. This is software
+validation, not a physical measurement of the user's browser or audio device.
+
+Follow-up checks PASS: target/ABI and package/recovery checksum build gates;
+integer-only generated metronome IR; bounded audio ownership and timestamp
+paths; unchanged persistence schema/dependencies/licenses; native `metro-test`,
+`input-test`, `game-test`; page controls; complete `web-test`; local site hashes.
+General native UI/settings suites were not repeated for this browser-input fix.
+Physical hardware deadlines, stacks/latency and install/recovery remain
+UNVERIFIED under the existing device test plan.
+
+The actual open in-app browser was reloaded and exercised through real keyboard
+input after using SELECT. A rapid-key stress round registered 16/16 beats,
+zero misses and 130 deliberate extra taps (182 key presses across count-in,
+guide bars, silent bars and results); the low stress-test score correctly
+penalizes those extras. Proof: `build/rhythm-input-browser-proof.jpg`.
+
 ## Shared Ear Trainer menu
 
 HOME + PLAY now opens one training chooser: Pitch training, Metronome,
@@ -113,8 +167,8 @@ WSL wrapper on Windows). CI now blocks on the metronome suites as well.
 Host screen fixtures are in `melodee/build/ear-baseline/metro-*.ppm`.
 The final target check reported 97,576/98,304 bytes data/BSS,
 135,172/357,888 bytes pool, a 77,408-byte available audio arena (49,152 required),
-and a 2,980-byte static audio-ISR stack bound. The local `.fwsc` is 668,948 bytes,
-SHA-256 `6cabf54f8eb1f85c4fdbfceaf51987c0ac346abb27a9bf07bb17e735fee49d26`.
+and a 2,984-byte static audio-ISR stack bound. The local `.fwsc` is 668,948 bytes,
+SHA-256 `d9db084d63abc331cb873197b7ea1e1a1dec2239d5696a3a0fc870559b2ae44e`.
 `fm1_recover.py --check` verified package checksums, chip key, application
 boundary and recovery-loader checksum. Free SRAM is split
 across banks and is not one contiguous heap.

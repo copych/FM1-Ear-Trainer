@@ -37,7 +37,8 @@ case "${1:-target}" in
                    "build/ear-baseline/$suite"
                  done ;;
   web-test) sh ../tools/node-wsl.sh ../tools/ear-web-smoke.mjs
-            exec sh ../tools/node-wsl.sh ../tools/metronome-web-smoke.mjs ;;
+            sh ../tools/node-wsl.sh ../tools/metronome-web-smoke.mjs
+            exec sh ../tools/node-wsl.sh ../tools/rhythm-input-test.mjs ;;
   site) exec python3 ../tools/prepare-web.py ;;
   *) echo 'usage: build-melodee.sh [target|host|ui-test|game-test|metro-test|training-test|input-test|settings-test|web|web-test|site]' >&2; exit 2 ;;
 esac

@@ -7,6 +7,7 @@ class Melodee extends AudioWorkletProcessor {
   constructor() {
     super();
     this.ex = null;
+    this.audioOrigin = null;
     this.port.onmessage = (e) => this.onMessage(e.data);
   }
 
@@ -43,20 +44,37 @@ class Melodee extends AudioWorkletProcessor {
     }
     const ex = this.ex;
     if (!ex) return;
-    if (m.type === "keys") ex.web_keys(m.mask >>> 0);
+    if (m.type === "audio-clock") {
+      if(Number.isFinite(m.outputDelay) && m.outputDelay>=0 && m.outputDelay<=2)
+        ex.web_metro_latency(Math.ceil((m.outputDelay+.25)*44100));
+    }
+    else if (m.type === "keys") {
+      const at=this.inputSample(m.audioTime);
+      if(at===null)ex.web_keys(m.mask >>> 0);else ex.web_keys_at(m.mask >>> 0,at);
+    }
     else if (m.type === "training") this.port.postMessage({type:"training-result",accepted:!!ex.web_training_open()});
     else if (m.type === "ear") this.port.postMessage({type:"ear-result", accepted:!!ex.web_ear_action(m.action)});
     else if (m.type === "metro") this.port.postMessage({type:"metro-result", accepted:!!ex.web_metro_action(m.action)});
     else if (m.type === "buttons") ex.web_buttons(m.mask >>> 0);
     else if (m.type === "encoder") ex.web_encoder(m.id, m.n | 0);
     else if (m.type === "master") ex.web_master(m.value | 0);
-    else if (m.type === "midi") ex.web_midi_in(m.data[0], m.data[1] || 0, m.data[2] || 0);
+    else if (m.type === "midi") {
+      const at=this.inputSample(m.audioTime);
+      if(at===null)ex.web_midi_in(m.data[0],m.data[1]||0,m.data[2]||0);
+      else ex.web_midi_at(m.data[0],m.data[1]||0,m.data[2]||0,at);
+    }
+  }
+
+  inputSample(time) {
+    if(this.audioOrigin===null || !Number.isFinite(time) || time>currentTime+.02 || time<currentTime-2)return null;
+    return Math.max(0,Math.round((time-this.audioOrigin)*44100))>>>0;
   }
 
   process(inputs, outputs) {
     const ex = this.ex;
     if (!ex) return true;
     const out = outputs[0], n = out[0].length;
+    if(this.audioOrigin===null)this.audioOrigin=currentTime;
     try {
       ex.web_render(n);
     } catch (err) {

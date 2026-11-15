@@ -16,6 +16,7 @@ enum eMetroMeter { METRO_METER_4_4=0, METRO_METER_2_4=1, METRO_METER_3_4=2,
 enum eMetroCommand { METRO_CMD_NONE, METRO_CMD_RESTART, METRO_CMD_TOGGLE,
     METRO_CMD_EXIT, METRO_CMD_TAP, METRO_COMMANDS_COUNT };
 enum eMetroState { METRO_STOPPED, METRO_COUNTIN, METRO_RUNNING, METRO_RESULT, METRO_STATES_COUNT };
+enum eMetroTargetState { METRO_TARGET_PENDING, METRO_TARGET_HIT, METRO_TARGET_MISSED, METRO_TARGET_STATES_COUNT };
 typedef struct { const char *name,*groups; uint8_t beats,den; uint16_t accents; } metro_meter_t;
 /* Accents identify group starts, including different ways to hear 5 and 7. */
 static const metro_meter_t metro_meters[]={
@@ -61,7 +62,7 @@ static volatile uint8_t metro_enabled,metro_request;
 static struct {
     metro_settings_t cfg;
     uint32_t now,start,next,period,rem,den,carry,pulse,end,tap_last,tap_sum,tap_intervals[4];
-    uint32_t window,version,abs_ms,square_ms;
+    uint32_t window,version,abs_ms,square_ms,input_grace;
     int32_t bias_ms,last_ms,input_delay;
     uint16_t extra,hits,misses,click_left,click_phase;
     uint8_t state,beat,bar,judge,targets,tap_count,tap_valid,tap_index,click_pitch,click_gain;
@@ -124,33 +125,36 @@ static void metro_restart(void)
     uint32_t den=(uint32_t)metro.cfg.bpm*m->den;
     for(uint32_t b=1;b<=METRO_GAME_BARS;b++)for(uint32_t k=0;k<m->beats;k++)if(metro_target(b,k,&metro.cfg)) {
         uint32_t i=metro.targets++;
-        metro_targets[i].at=metro.start+((b*m->beats+k)*(FS*240u))/den;metro_targets[i].hit=0;
+        metro_targets[i].at=metro.start+((b*m->beats+k)*(FS*240u))/den;metro_targets[i].hit=METRO_TARGET_PENDING;
     }
     metro.end=metro.start+((METRO_GAME_BARS+1u)*m->beats*(FS*240u))/den;
     metro.state=METRO_COUNTIN;metro.beat=metro.bar=0;metro.click_left=0;metro.version++;
 }
-static void metro_tap(void)
+/* Native input uses now; the browser supplies the captured audible sample
+ * time so device/output latency and message delivery don't become tap error. */
+static void metro_tap_at(uint32_t input_time)
 {
     if(metro.cfg.mode==METRO_PRACTICE ||
        (metro.state!=METRO_RUNNING && metro.state!=METRO_COUNTIN))return;
     /* Allow an early first answer at the count-in boundary (notably 1/4).
      * Taps earlier in the count-in have no effect on the score. */
-    uint32_t tapped=metro.now-metro.input_delay;
+    uint32_t tapped=input_time-metro.input_delay;
     if(metro.state==METRO_COUNTIN && (!metro.targets ||
        (int32_t)(tapped-metro_targets[0].at)<-(int32_t)metro.window))return;
     uint32_t best=METRO_TARGETS_MAX,distance=metro.window+1u;
-    for(uint32_t k=0;k<metro.targets;k++)if(!metro_targets[k].hit) {
+    for(uint32_t k=0;k<metro.targets;k++)if(metro_targets[k].hit==METRO_TARGET_PENDING) {
         int32_t d=(int32_t)(tapped-metro_targets[k].at);
         uint32_t a=(uint32_t)(d<0?-d:d);
         if(a<distance) {best=k;distance=a;}
     }
     if(best==METRO_TARGETS_MAX) {if(metro.extra<999u)metro.extra++;metro.version++;return;}
-    metro_targets[best].hit=1;metro.hits++;
+    metro_targets[best].hit=METRO_TARGET_HIT;metro.hits++;
     int32_t d=(int32_t)(tapped-metro_targets[best].at);
     int32_t ms=d*1000/(int32_t)FS;
     metro.last_ms=ms;metro.bias_ms+=ms;metro.abs_ms+=(uint32_t)(ms<0?-ms:ms);
     metro.square_ms+=(uint32_t)(ms*ms);metro.version++;
 }
+static void metro_tap(void) {metro_tap_at(metro.now);}
 /* Tap tempo averages the last four intervals; long gaps reset, no isolated
  * tap changes BPM. Audio publishes BPM; main observes it and defers saving. */
 static void metro_tempo_tap(void)
@@ -186,9 +190,13 @@ static int32_t metro_sample(void)
     uint32_t now=metro.now++;
     if(!metro_enabled)return 0;
     if(metro.state==METRO_COUNTIN || metro.state==METRO_RUNNING) {
-        uint32_t judged=now-(metro.input_delay>0?(uint32_t)metro.input_delay:0u);
+        /* Browser-only grace allows audible-clock input messages to arrive.
+         * Native input_grace stays zero; the matching window is unchanged. */
+        uint32_t judged=now-metro.input_grace-(metro.input_delay>0?(uint32_t)metro.input_delay:0u);
         if(metro.judge<metro.targets && (int32_t)(judged-metro_targets[metro.judge].at)>(int32_t)metro.window) {
-            if(!metro_targets[metro.judge].hit)metro.misses++;
+            if(metro_targets[metro.judge].hit==METRO_TARGET_PENDING) {
+                metro_targets[metro.judge].hit=METRO_TARGET_MISSED;metro.misses++;
+            }
             metro.judge++;metro.version++;
         }
         if(metro.cfg.mode!=METRO_PRACTICE && (int32_t)(judged-metro.end)>(int32_t)metro.window) {

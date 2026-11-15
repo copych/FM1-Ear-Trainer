@@ -57,6 +57,7 @@
     <div class="poweron" id="poweron" aria-hidden="true"></div>
   </div>
   <section aria-label="How to play">
+    <p id="timinginfo" class="small" hidden></p>
     <p><strong>One Ear Trainer, four activities:</strong> press Start training, turn SELECT (or K1) to choose Pitch training, Metronome, Keep tempo or Missing beats, then press PLAY. HOME returns to this training menu; HOME again leaves training.</p>
     <p><strong>Rhythm practice:</strong> PLAY starts/stops, REC taps quarter-note tempo, SELECT turns the settings page. K1–K4 adjust tempo, meter, rhythm and game; the second page sets subdivision, volume, silent bars and timing tolerance. PRESETS loads rhythms and games. In a game, tap any key or MIDI note on the silent beats. <a href="../webapp/manual/#metronome">Metronome guide</a>.</p>
     <p><strong>Pitch training:</strong> listen, then play the hidden notes in any order. Click the keys or use the computer-keyboard letters printed on them. Highlighted notes are safe to play again.</p>
@@ -143,6 +144,32 @@ for (const [code, k] of Object.entries(TRACKER)) keys[k].textContent += (keys[k]
 /* ---- input */
 let node = null;
 const send = (m) => node && node.port.postMessage(m);
+/* Map captured input time onto the audio actually reaching the output device.
+ * AudioContext.currentTime alone is ahead of what the player can hear.
+ * https://webaudio.github.io/web-audio-api/#dom-audiocontext-getoutputtimestamp */
+function audioClock(eventTime) {
+  const ac=node?.context;if(!ac)return null;
+  const now=performance.now();
+  const at=Number.isFinite(eventTime) && Math.abs(eventTime-now)<60000?eventTime:now;
+  const estimated=Math.max(0,Number(ac.baseLatency)||0)+Math.max(0,Number(ac.outputLatency)||0);
+  let audible=ac.currentTime-estimated+(at-now)/1000,accurate=false;
+  try {
+    const stamp=ac.getOutputTimestamp?.();
+    if(stamp && stamp.contextTime>0 && stamp.performanceTime>0 && Math.abs(now-stamp.performanceTime)<2000) {
+      audible=stamp.contextTime+(at-stamp.performanceTime)/1000;accurate=true;
+    }
+  } catch {}
+  const heardNow=audible+(now-at)/1000;
+  return {audioTime:Math.max(0,audible),outputDelay:Math.min(1.75,Math.max(estimated,ac.currentTime-heardNow,0)),accurate};
+}
+function sendInput(message,eventTime) {
+  const clock=audioClock(eventTime);
+  if(clock) {
+    send({type:"audio-clock",outputDelay:clock.outputDelay});
+    message.audioTime=clock.audioTime;
+  }
+  send(message);
+}
 const heldKeys = new Map(), heldBtns = new Map();
 const latchedBtns = new Set();
 let latchReleaseTimer = null;
@@ -157,7 +184,7 @@ function consumeLatch() {
   latchReleaseTimer = setTimeout(() => { latchReleaseTimer=null;latchedBtns.clear();sync(); }, 60);
 }
 let keyMask = 0, btnMask = 0;
-function sync() {
+function sync(eventTime) {
   let k = 0, b = 0;
   for (const v of heldKeys.values()) k |= 1 << v;
   for (const v of heldBtns.values()) b |= 1 << v;
@@ -171,7 +198,7 @@ function sync() {
   $("holdhome").setAttribute("aria-pressed", String(latchedBtns.has(BTN.HOME)));
   $("holdhome").textContent = latchedBtns.has(BTN.HOME) ? "Release HOME" : "Hold HOME";
   $("holdstatus").textContent = latchedBtns.size ? "Held: " + [...latchedBtns].map(i => buttons[i].textContent).join(" + ") : "";
-  if (k !== keyMask) send({ type: "keys", mask: (keyMask = k) });
+  if (k !== keyMask) sendInput({ type: "keys", mask: (keyMask = k) },eventTime);
   if (b !== btnMask) send({ type: "buttons", mask: (btnMask = b) });
 }
 function hold(el, map, v) {
@@ -185,7 +212,7 @@ function hold(el, map, v) {
     }
     el.setPointerCapture(e.pointerId);
     map.set("p" + e.pointerId, v);
-    sync();
+    sync(e.timeStamp);
   });
 }
 keys.forEach((el, i) => hold(el, heldKeys, i));
@@ -194,7 +221,7 @@ for (const ev of ["pointerup", "pointercancel", "lostpointercapture"])
   device.addEventListener(ev, (e) => {
     if (ev === "pointercancel") { releaseAll();return; }
     if (heldKeys.delete("p" + e.pointerId) | heldBtns.delete("p" + e.pointerId)) {
-      sync();consumeLatch();
+      sync(e.timeStamp);consumeLatch();
     }
   }, true);
 function releaseAll() { cancelLatchRelease();heldKeys.clear();heldBtns.clear();latchedBtns.clear();sync(); }
@@ -244,11 +271,14 @@ for (const k of knobs) {
 function onKey(e, down) {
   if (e.code === "Escape") { e.preventDefault();releaseAll();return; }
   const k = TRACKER[e.code];
-  if (k === undefined || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("select, [role=slider]")) return;
+  if (k === undefined) return;
+  if (down && (e.metaKey || e.ctrlKey || e.altKey || e.target.closest("select, input, textarea, [contenteditable=true]"))) return;
+  // A release follows its accepted press even if focus or modifiers changed.
+  if (!down && !heldKeys.has(e.code)) return;
   e.preventDefault();
   if (e.repeat) return;
   if (down) { cancelLatchRelease();heldKeys.set(e.code, k); } else heldKeys.delete(e.code);
-  sync();
+  sync(e.timeStamp);
   if (!down) consumeLatch();
 }
 addEventListener("keydown", (e) => onKey(e, true));
@@ -308,13 +338,21 @@ $("power").addEventListener("click", async () => {
       if (m.type === "frame") {
         if(m.metroStats?.[0]===3) {
           const [,score,hits,total,miss,extra,error,bias,sd]=m.metroStats;
-          $("status").textContent=`Score ${score}%. Hits ${hits}/${total}; missed ${miss}; extra ${extra}. Mean error ${error} ms, bias ${bias} ms, consistency ${sd} ms.`;
+          const timing=hits?`Mean error ${error} ms, bias ${bias} ms, consistency ${sd} ms.`:"Timing unavailable: no matched taps. Tap the silent beats; audible guide beats are not scored.";
+          $("status").textContent=`Score ${score}%. Hits ${hits}/${total}; missed ${miss}; extra ${extra}. ${timing}`;
         } else $("status").textContent="";
+        const clock=audioClock();
+        if(clock) {
+          send({type:"audio-clock",outputDelay:clock.outputDelay});
+          $("timinginfo").hidden=false;
+          $("timinginfo").textContent=clock.accurate?"Audio timing compensated automatically. ALGORITHM adds a manual input correction.":
+            "Audio timing estimated. Use ALGORITHM if your taps stay consistently early or late.";
+        }
         $("holdhome").disabled=false;$("releaseheld").disabled=false;
         const requested=startPending;
         if(requested) {startPending=false;send({type:"training"});}
         $("power").disabled=!!m.earActive || !!m.metroActive || !!m.trainingActive || requested;
-        $("power").textContent=m.trainingMenu?"Choose an activity":m.trainingActive?"Training running":"Start training";
+        $("power").textContent=m.trainingMenu?"Choose an activity":m.metroStats?.[0]===3?"Round finished":m.trainingActive?"Training running":"Start training";
       }
       if(m.type==="ear-result" && !m.accepted) {$("status").textContent="Stop playback before starting training.";$("power").disabled=false;}
       if(m.type==="metro-result" && !m.accepted)$("status").textContent="Stop playback and leave training before starting the metronome.";
@@ -352,7 +390,7 @@ $("midiin").addEventListener("pointerdown", async () => {
 $("midiin").addEventListener("change", () => {
   if (midiIn) midiIn.onmidimessage = null;
   midiIn = midi && midi.inputs.get($("midiin").value);
-  if (midiIn) midiIn.onmidimessage = (e) => e.data[0] < 0xf0 && send({ type: "midi", data: Array.from(e.data) });
+  if (midiIn) midiIn.onmidimessage = (e) => e.data[0] < 0xf0 && sendInput({ type: "midi", data: Array.from(e.data) },e.timeStamp);
 });
 </script>
 </body>

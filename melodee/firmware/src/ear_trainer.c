@@ -258,7 +258,7 @@ static void ear_keyboard(uint32_t cur)
 static void ear_source_lost(uint32_t source);
 /* Observe raw MIDI while inactive too, so a pre-existing hold cannot answer.
  * Generated playback never enters this raw input path. */
-static int ear_midi(uint32_t st,uint32_t ch,uint32_t note,uint32_t vel,uint32_t source)
+static int ear_midi_at(uint32_t st,uint32_t ch,uint32_t note,uint32_t vel,uint32_t source,uint32_t input_time)
 {
     if (source>3u || ch>=16u || note>=128u) return ear_enabled || metro_enabled || training_menu_open;
     uint32_t *bits=&ear_midi_keys[source][ch][note>>5], bit=1u<<(note&31u), was=*bits&bit;
@@ -266,7 +266,7 @@ static int ear_midi(uint32_t st,uint32_t ch,uint32_t note,uint32_t vel,uint32_t 
         *bits|=bit;
         if(!was) ear_down[source]++;
         if(!training_menu_open) {
-            if(metro_enabled && !was)metro_tap();
+            if(metro_enabled && !was)metro_tap_at(input_time);
             else if(ear_enabled && !was) ear_player_press(note);
         }
     } else if(st==0x80u || (st==0x90u && !vel)) {
@@ -276,6 +276,8 @@ static int ear_midi(uint32_t st,uint32_t ch,uint32_t note,uint32_t vel,uint32_t 
     } else if(st==0xB0u && (note==120u || note==123u)) ear_source_lost(source);
     return ear_enabled || metro_enabled || training_menu_open;
 }
+static int ear_midi(uint32_t st,uint32_t ch,uint32_t note,uint32_t vel,uint32_t source)
+{return ear_midi_at(st,ch,note,vel,source,metro.now);}
 static void ear_source_lost(uint32_t source)
 {
     if(source<4u) for(uint32_t ch=0;ch<16u;ch++) for(uint32_t k=0;k<4u;k++) ear_midi_keys[source][ch][k]=0;

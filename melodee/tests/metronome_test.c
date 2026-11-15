@@ -65,6 +65,16 @@ int main(void)
         for(uint32_t k=0;k<metro.targets;k++) {advance_to(metro_targets[k].at);metro_tap();}
         finish();assert(metro.hits==16u && !metro.misses && !metro.extra && !metro.abs_ms && !metro.bias_ms);
     }
+    /* Captured browser times remain accurate despite delivery after the
+     * audible event; the grace changes expiration, never the match window. */
+    begin(METRO_KEEP);metro.input_grace=FS/2u;
+    uint32_t captured=metro_targets[0].at;
+    advance_to(captured+FS/4u);metro_tap_at(captured);
+    assert(metro.hits==1u && !metro.misses && !metro.abs_ms);
+    metro.input_grace=0;finish();
+    begin(METRO_KEEP);captured=metro_targets[0].at;
+    advance_to(captured+metro.window+2u);assert(metro.misses==1u);
+    metro_tap_at(captured);assert(!metro.hits && metro.misses==1u && metro.extra==1u);
     /* Alternate 20 ms early/late; duplicate taps can't inflate a score. */
     begin(METRO_MISSING);
     for(uint32_t k=0;k<metro.targets;k++) {

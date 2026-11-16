@@ -2,7 +2,7 @@
 
 **On your FM-1: stop playback, hold HOME and press PLAY to open Ear Trainer.**
 
-Turn SELECT (or K1) to choose **Pitch training**, **Metronome**, **Keep tempo**, or **Missing beats**, then press PLAY. HOME returns to this shared training menu; HOME again leaves training. In the browser, choose **Start training** to open the same menu. All four activities are included in one firmware.
+Turn SELECT (or K1) to choose **Pitch training**, **Metronome**, or **Rhythm game**, then press PLAY. HOME returns to this shared training menu; HOME again leaves training. In the browser, choose **Start training** to open the same menu. All three activities are included in one firmware.
 
 Listen to the notes, then play the hidden ones on the keyboard—in any order, separately or together. Highlighted notes are safe to play again while you work out the rest.
 
@@ -29,15 +29,16 @@ Settings and ratings are saved. Leave training and let saving finish before swit
 
 ## Metronome and rhythm games
 
-Choose **Metronome**, **Keep tempo**, or **Missing beats** from the shared training menu. **HOME + REC** remains a direct rhythm shortcut when outside training.
+Choose **Metronome** or **Rhythm game** from the shared training menu. **HOME + REC** remains a direct rhythm shortcut when outside training.
 
-Set 30–300 BPM, choose among 19 meters/groupings (including 5, 7, 11, 13 and 15), and use straight subdivisions, offbeats, swing or tresillo. PRESETS offers 16 complete setups and four saved user slots.
+One settings page offers 30–300 BPM and 22 meters/pulse grids, including odd groupings and 4/4 eighths, triplets and sixteenths. Volume stays at 100%, subdivision at 1, and the timing window at ±60 ms (capped below half a pulse at fast tempos). PRESETS offers 16 setups and four saved user slots.
 
 | Control | What it does |
 | --- | --- |
-| K1–K4 | BPM, meter/grouping, rhythm, practice / keep tempo / missing beats |
-| SELECT | Turn between the two settings pages |
-| K1–K4, second page | Subdivision 1–4, click volume, silent bars 1–4, timing tolerance ±10–150 ms |
+| K1 | Tempo |
+| K2 | Meter/grouping, including pulse grids |
+| K3 | Full bars / Odds / Evens |
+| K4 | Audible/hidden bars: 1/1 or 2/2 |
 | PLAY | Start/stop; start another round after results |
 | REC | Tap quarter-note tempo; averages up to four intervals |
 | Any keyboard key / MIDI note | Submit a game tap |
@@ -47,7 +48,7 @@ Set 30–300 BPM, choose among 19 meters/groupings (including 5, 7, 11, 13 and 1
 | ALGORITHM | Input timing correction −100 to +100 ms |
 | HOME | Return to the training menu and save settings/presets |
 
-**Keep tempo:** one audible count-in bar, then eight bars alternating one guide bar with your chosen number of silent bars. Tap every silent beat. **Missing beats:** tap the second, fourth, sixth… meter beats while the other beats play. In 1/4, tap every scored beat. Games use the meter’s denominator beats; rhythm patterns/subdivisions apply to free practice. BPM always counts quarter notes.
+**Rhythm game:** one audible count-in bar, then eight scored bars alternating audible and hidden bars (1/1 or 2/2). Tap only the missing pulses in hidden bars: **Full bars** hides all pulses; **Odds** hides 1, 3, 5…; **Evens** hides 2, 4, 6…. Other pulses stay audible. Numbering starts again each bar. Evens needs at least two pulses, so selecting it in 1/4 switches to 2/4. BPM always counts quarter notes. Metronome plays the selected grid continuously without scoring.
 
 Results show a timing-weighted score, hits, misses, extra taps, mean absolute error, signed early/late bias and timing consistency (SD). Game visuals hide the pulse after count-in. The browser aligns captured taps with the audio output clock automatically when supported; ALGORITHM adds a manual input correction (start at 0 ms). Use wired audio for consistent timing. See the [metronome guide](https://copych.github.io/feature-metronome-training-games/webapp/manual/#metronome) for details. Device settings save after leaving the screen; browser settings and user slots are remembered locally. Round results are session-only.
 

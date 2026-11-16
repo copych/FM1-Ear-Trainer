@@ -2,8 +2,7 @@
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 /* Main-only navigation. Activity teardown remains audio-owned: never launch
  * another activity until its EXIT command has been consumed. */
-enum eTrainingActivity { TRAINING_PITCH, TRAINING_METRONOME, TRAINING_KEEP,
-    TRAINING_MISSING, TRAINING_ACTIVITIES_COUNT };
+enum eTrainingActivity { TRAINING_PITCH, TRAINING_METRONOME, TRAINING_RHYTHM, TRAINING_ACTIVITIES_COUNT };
 static uint8_t training_choice,training_session;
 static int training_ui_start(void)
 {
@@ -22,8 +21,7 @@ static int training_ui_launch(void)
     int started;
     if(training_choice==TRAINING_PITCH)started=ear_ui_start();
     else {
-        fm1_irq_off();metro_settings.mode=(uint8_t)(training_choice==TRAINING_KEEP?METRO_KEEP:
-            training_choice==TRAINING_MISSING?METRO_MISSING:METRO_PRACTICE);fm1_irq_on();
+        fm1_irq_off();metro_settings.mode=(uint8_t)(training_choice==TRAINING_RHYTHM?METRO_GAME:METRO_PRACTICE);fm1_irq_on();
         started=metro_ui_start();
         if(started)settings_save();
     }
@@ -54,19 +52,19 @@ static int training_ui_input(uint32_t pressed)
 static void training_ui_draw(void)
 {
     if(!ui.force)return;ui.force=0;
-    static const char *names[TRAINING_ACTIVITIES_COUNT]={"Pitch training","Metronome","Keep tempo","Missing beats"};
-    static const char *hints[TRAINING_ACTIVITIES_COUNT]={"Find hidden notes","Patterns and meters","Hold silent beats","Fill silent beats"};
+    static const char *names[TRAINING_ACTIVITIES_COUNT]={"Pitch training","Metronome","Rhythm game"};
+    static const char *hints[TRAINING_ACTIVITIES_COUNT]={"Find hidden notes","Meters and pulse grids","Full / Odds / Evens"};
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,T_BG);
         if(!band) {
             cv_text_c(120,0,TY_TX,"EAR TRAINER",T_THEME,T_BG);
             cv_text_c(120,27,TY_LB,"SELECT  PLAY  HOME",T_DIM,T_BG);
-        } else {
+        } else if(band<=TRAINING_ACTIVITIES_COUNT) {
             uint32_t at=band-1u;uint16_t border=at==training_choice?T_THEME:T_PANEL;
             cv_rrect(5,2,230,44,5,border,T_BG);cv_rrect(7,4,226,40,4,T_PANEL,border);
             cv_text_c(120,4,TY_TX,names[at],at==training_choice?T_THEME:T_TEXT,T_PANEL);
             cv_text_c(120,26,TY_LB,hints[at],T_DIM,T_PANEL);
-        }
+        } else cv_text_c(120,16,TY_LB,"HOME: LEAVE TRAINING",T_DIM,T_BG);
         cv_blit(0,band*48u);
     }
 }

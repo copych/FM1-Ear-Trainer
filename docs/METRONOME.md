@@ -3,6 +3,60 @@
 The player controls are in the root README and `web/guide/index.html#metronome`.
 This is a development patch, not a hardware-qualified release.
 
+## Unified rhythm game — current controls
+
+The shared menu now contains Pitch training, Metronome and Rhythm game.
+There is one settings page: K1 tempo, K2 meter/pulse grid, K3 Full bars /
+Odds / Evens, K4 audible/hidden bars 1/1 or 2/2. Click volume is fixed at
+100%, subdivision at 1, and nominal matching tolerance at ±60 ms, capped
+below half a pulse at fast tempos. Meter IDs 0–18 are unchanged; IDs 19–21
+add 4/4 eighths, triplets and sixteenths with quarter-note accents. These
+grids are represented directly by pulse count/denominator (8/8, 12/12,
+16/16) and retain four-quarter-note bar duration.
+
+One count-in bar precedes eight scored bars. The cycle selects alternating
+guide/hidden blocks of one or two bars. Full bars hides every pulse in the
+hidden bars; Odds hides 1,3,5…; Evens hides 2,4,6…. Other pulses stay audible.
+Numbering restarts each bar. Evens in 1/4 normalizes to 2/4 to avoid a round
+with no targets. Presets preserve the current activity. Maximum targets are
+64 (four hidden bars × sixteen pulses), within the existing 120-slot pool.
+
+The metronome's 12-byte wire record is version 2, with unchanged PER5 object
+size and five record locations. Version 1 records remain readable: tempo
+and input correction survive; old keep-tempo becomes Full bars and old
+missing-beats becomes Evens; silent counts above one become 2/2. Old 1/4
+missing-beats becomes Full bars. Straight 4/4 subdivisions map to the new
+grids; other old rhythm/volume/tolerance controls adopt the fixed defaults.
+Browser storage writes a v2 key and reads the v1 key as a fallback, retaining
+the old browser record. CRC-invalid/unsupported records are still rejected.
+
+Changed execution paths remain main-loop UI/codec and audio-owned bounded
+restart/target/sample/input logic. IRQ-masked settings publication, deferred
+flash writes and captured browser tap times retain their existing ownership.
+No dependencies, flash layout, clocks, bootloader or pitch-training behavior
+are changed. Source baseline: 8dfba79 on feature-metronome-training-games.
+
+Current revision compliance:
+
+| Category | Status and evidence |
+| --- | --- |
+| Target / build / ABI | PASS for compilation/package checks: classic FM-1, nominal 44.1 kHz, 32-sample control blocks, 128-sample I2S halves; matched SDK d179b4484759423312073f5fbb232501aa491047 and existing pi32v2 Clang 4.0.1 r3 build/flags. `target` passed all manifest, RAM closure, register and package checks. Bootloader identity on a physical unit remains UNKNOWN. |
+| Audio hot path / numerics | PASS for source/generated-code review: integer-only bounded restart (≤144 candidate pulses), tap search (≤64 actual targets), one expiration per sample, constant-work click. `metro_sample` disassembly uses hardware integer division at pulse boundaries and calls only the bounded RAM-resident `metro_target`; no allocation, I/O, waits or new floating/library helpers. Flash meter table access retains the existing scheme. Cycle division replaces the old silence-pattern division; device costs remain unmeasured. |
+| Execution ownership / synchronization | PASS for structure: existing main/ISR split, IRQ-masked setting publication, audio-owned runtime/commands and browser captured timestamps retained; no worker, queue, blocking or ownership changes. |
+| Memory / storage / I/O | PASS for static/build/host checks: data+BSS 97,560/98,304 B; pool 135,172/357,888 B; audio arena 77,536 B (minimum 49,152); ISR stack audit 2,984 B. Existing 120-target pool retained, settings record/object size unchanged, flash remains deferred until activity exit. Hardware peak usage and flash latency UNVERIFIED. |
+| Dependencies / includes / licenses | PASS: no new dependencies/assets or execution model changes; original GPL/SPDX and Kerem Kilic notices retained. |
+| Compatibility / package / recovery | PASS for host/build validation: v1→v2 codec migration, four slots, CRC/bounds, neighboring records, reboot and interrupted A/B writes pass; fixed volume/subdivision/window values serialized. FM-1_327008 package built at 668,948 B; existing resource/loader/manifest checks retained. Physical installation and rollback UNVERIFIED; no flashing performed. |
+| Host functional validation | PASS: `metro-test`, `training-test`, `settings-test`, `game-test`, `input-test`, `ui-test`, `web`, `web-test`, `node tools/emu-controls-test.cjs`, `site` and served-site checks. Native tests cover all 22 grids × 3 rules × 2 cycles, independent click schedules in 7/8, wraps, errors, duplicates, ownership, one-page controls and migration. Worklet/WASM tests score 16/16 Full, 8/8 Odds, 8/8 Evens 2/2 and 64/64 sixteenths with delayed speaker clocks, and reject 90 ms-late taps. One-page framebuffer visually reviewed at 240×240 (enlarged for inspection). |
+| Hardware real-time validation | UNVERIFIED: no physical FM-1 connected/tested. Before hardware qualification measure ISR deadline/headroom (<2.90 ms half-buffer period), clock jitter, audio/input latency, underruns and stack peaks across all grids/tempo extremes, USB/TRS MIDI and rapid UI activity; test speaker/headphone gain, entry/exit and deferred saves, cold boots and recovery, then run a sustained soak. No hardware timing or audible-output claim follows from these host checks. |
+
+The previously recorded hardware/recovery tests remain skipped. No separate
+performance benchmark or sanitizer run is claimed for this revision.
+
+## Earlier implementation and investigation (historical)
+
+The following sections describe the original separate games and two-page UI.
+The current controls and migration above supersede those descriptions.
+
 ## Browser tap-timing correction
 
 A second reproduced defect ignored note keys after SELECT or another knob

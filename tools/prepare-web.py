@@ -49,7 +49,7 @@ banner = f'''<aside style="padding:14px 20px;background:#242126;color:#fff;text-
 Branch installer: <strong>{html.escape(SOURCE_BRANCH)}</strong><br>
 Source: <a style="color:#ffb58a" href="https://github.com/{html.escape(SOURCE_REPOSITORY, quote=True)}/tree/{html.escape(SOURCE_REVISION, quote=True)}">{html.escape(SOURCE_REVISION[:12])}</a>{" (local working tree)" if SOURCE_DIRTY else ""}<br>
 After installing, stop playback, hold HOME and press PLAY to open the training menu.
-Choose pitch training, metronome, keep tempo or missing beats; press PLAY to begin.
+Choose pitch training, metronome or rhythm game; press PLAY to begin.
 <a style="color:#ffb58a" href="../../emu/">Try the emulator</a> ·
 <a style="color:#ffb58a" href="../../">Home</a></aside>'''
 page = page.replace("<body>", "<body>" + banner, 1)

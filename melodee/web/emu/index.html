@@ -58,8 +58,8 @@
   </div>
   <section aria-label="How to play">
     <p id="timinginfo" class="small" hidden></p>
-    <p><strong>One Ear Trainer, four activities:</strong> press Start training, turn SELECT (or K1) to choose Pitch training, Metronome, Keep tempo or Missing beats, then press PLAY. HOME returns to this training menu; HOME again leaves training.</p>
-    <p><strong>Rhythm practice:</strong> PLAY starts/stops, REC taps quarter-note tempo, SELECT turns the settings page. K1–K4 adjust tempo, meter, rhythm and game; the second page sets subdivision, volume, silent bars and timing tolerance. PRESETS loads rhythms and games. In a game, tap any key or MIDI note on the silent beats. <a href="../webapp/manual/#metronome">Metronome guide</a>.</p>
+    <p><strong>One Ear Trainer, three activities:</strong> press Start training, turn SELECT (or K1) to choose Pitch training, Metronome or Rhythm game, then press PLAY. HOME returns to this training menu; HOME again leaves training.</p>
+    <p><strong>Rhythm practice:</strong> one settings page. K1 tempo; K2 meter/pulse grid; K3 Full bars, Odds or Evens; K4 audible/hidden bars (1/1 or 2/2). Volume is 100%, subdivision 1, timing window ±60 ms (capped below half a pulse at fast tempos). PLAY starts/stops; REC taps quarter-note tempo. PRESETS loads setups. Tap any key or MIDI note on the silent pulses in hidden bars. <a href="../webapp/manual/#metronome">Metronome guide</a>.</p>
     <p><strong>Pitch training:</strong> listen, then play the hidden notes in any order. Click the keys or use the computer-keyboard letters printed on them. Highlighted notes are safe to play again.</p>
     <p><strong>PLAY</strong> repeats the question · <strong>REC</strong> skips · <strong>HOME</strong> returns to the training menu.<br>
     <strong>K1</strong>: scale · <strong>K2</strong>: notes to guess / range · <strong>K4</strong>: note spacing · <strong>PRESETS</strong>: sound.</p>
@@ -334,7 +334,7 @@ $("power").addEventListener("click", async () => {
       if (m.type === "crash") { $("status").textContent = "Stopped: " + m.message; return; }
       if (m.earSettings) storeEarSettings(m.earSettings);
       if (m.earRatings) storeEarRatings(m.earRatings);
-      if(m.metroSettings) {try {localStorage.setItem("fm1-metronome.settings.v1",JSON.stringify(m.metroSettings));}catch {}}
+      if(m.metroSettings) {try {localStorage.setItem("fm1-metronome.settings.v2",JSON.stringify(m.metroSettings));}catch {}}
       if (m.type === "frame") {
         if(m.metroStats?.[0]===3) {
           const [,score,hits,total,miss,extra,error,bias,sd]=m.metroStats;
@@ -362,7 +362,7 @@ $("power").addEventListener("click", async () => {
       buttons.forEach((el, i) => el.classList.toggle("lit", !!(m.buttons & (1 << i))));
     };
     let metroSettings=null;
-    try {metroSettings=JSON.parse(localStorage.getItem("fm1-metronome.settings.v1"));}catch {}
+    try {metroSettings=JSON.parse(localStorage.getItem("fm1-metronome.settings.v2") ?? localStorage.getItem("fm1-metronome.settings.v1"));}catch {}
     node.port.postMessage({ type: "load", wasm, master, earSettings: readEarSettings(), earRatings:readEarRatings(),metroSettings }, [wasm]);
     await ac.resume();
     $("poweron").hidden = true;

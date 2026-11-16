@@ -4,15 +4,17 @@
  * complete settings + a command with IRQs masked. No engine/transport clock,
  * allocation, storage, floating point or library math in the render path. */
 /* Explicit stable wire IDs; adding/reordering options requires codec review. */
-enum eMetroMode { METRO_PRACTICE=0, METRO_KEEP=1, METRO_MISSING=2, METRO_MODES_COUNT };
-enum eMetroPattern { METRO_STRAIGHT=0, METRO_OFFBEAT=1, METRO_SWING=2, METRO_TRESILLO=3, METRO_PATTERNS_COUNT };
+enum eMetroMode { METRO_PRACTICE=0, METRO_GAME=1, METRO_MODES_COUNT };
+enum eMetroGame { METRO_FULL_BARS=0, METRO_ODDS=1, METRO_EVENS=2, METRO_GAMES_COUNT };
+enum eMetroCycle { METRO_CYCLE_1_1=0, METRO_CYCLE_2_2=1, METRO_CYCLES_COUNT };
 enum eMetroMeter { METRO_METER_4_4=0, METRO_METER_2_4=1, METRO_METER_3_4=2,
     METRO_METER_6_8=3, METRO_METER_9_8=4, METRO_METER_12_8=5,
     METRO_METER_5_8_23=6, METRO_METER_5_8_32=7, METRO_METER_7_8_223=8,
     METRO_METER_7_8_322=9, METRO_METER_7_8_232=10, METRO_METER_5_4=11,
     METRO_METER_7_4=12, METRO_METER_11_8=13, METRO_METER_13_8=14,
     METRO_METER_15_8=15, METRO_METER_3_2=16, METRO_METER_7_16=17,
-    METRO_METER_1_4=18, METRO_METERS_COUNT };
+    METRO_METER_1_4=18, METRO_METER_4_4_EIGHTHS=19,
+    METRO_METER_4_4_TRIPLETS=20, METRO_METER_4_4_SIXTEENTHS=21, METRO_METERS_COUNT };
 enum eMetroCommand { METRO_CMD_NONE, METRO_CMD_RESTART, METRO_CMD_TOGGLE,
     METRO_CMD_EXIT, METRO_CMD_TAP, METRO_COMMANDS_COUNT };
 enum eMetroState { METRO_STOPPED, METRO_COUNTIN, METRO_RUNNING, METRO_RESULT, METRO_STATES_COUNT };
@@ -27,7 +29,11 @@ static const metro_meter_t metro_meters[]={
     {"5/4","3+2",5,4,9}, {"7/4","4+3",7,4,17},
     {"11/8","3+3+3+2",11,8,585}, {"13/8","3+3+3+2+2",13,8,2633},
     {"15/8","3+3+3+3+3",15,8,4681}, {"3/2","1+1+1",3,2,1},
-    {"7/16","2+2+3",7,16,21}, {"1/4","1",1,4,1}
+    {"7/16","2+2+3",7,16,21}, {"1/4","1",1,4,1},
+    /* Pulse-grid variants: subdivision stays one; the grid defines the
+     * numerator/denominator, duration and quarter-note accents directly. */
+    {"4/4e","4/4 EIGHTHS",8,8,85}, {"4/4t","4/4 TRIPLETS",12,12,585},
+    {"4/4s","4/4 SIXTEENTHS",16,16,4369}
 };
 _Static_assert(METRO_METERS_COUNT==sizeof metro_meters/sizeof metro_meters[0],"meter ID/table mismatch");
 #define METRO_USER_COUNT 4u
@@ -35,27 +41,31 @@ _Static_assert(METRO_METERS_COUNT==sizeof metro_meters/sizeof metro_meters[0],"m
 #define METRO_PREFS_BYTES (METRO_RECORD_BYTES*(METRO_USER_COUNT+1u))
 #define METRO_TARGETS_MAX 120u
 #define METRO_GAME_BARS 8u
-typedef struct { uint16_t bpm; uint8_t meter,pattern,sub,mode,volume,silent,tolerance; int8_t offset; } metro_settings_t;
-static const metro_settings_t metro_default={120,METRO_METER_4_4,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60,0};
-static metro_settings_t metro_settings={120,METRO_METER_4_4,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60,0};
+_Static_assert(METRO_GAME_BARS%4u==0u && METRO_TARGETS_MAX>=64u && METRO_TARGETS_MAX<=255u,"review cycle target bounds");
+_Static_assert((METRO_GAME_BARS+1u)*16u<=0xFFFFFFFFu/(FS*240u),"sample schedule multiplication overflows");
+enum { METRO_CLICK_VOLUME=100, METRO_SUBDIVISION=1, METRO_WINDOW_MS=60,
+       METRO_LEGACY_METERS=19, METRO_LEGACY_PATTERNS=4, METRO_LEGACY_MODES=3 };
+typedef struct { uint16_t bpm; uint8_t meter,mode,game,cycle; int8_t offset; } metro_settings_t;
+static const metro_settings_t metro_default={120,METRO_METER_4_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0};
+static metro_settings_t metro_settings={120,METRO_METER_4_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0};
 static metro_settings_t metro_user[METRO_USER_COUNT]; /* zero BPM = empty */
 static const struct { const char *name; metro_settings_t settings; } metro_factory[]={
-    {"Quarter notes",{120,METRO_METER_4_4,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60}},
-    {"Eighth notes",{100,METRO_METER_4_4,METRO_STRAIGHT,2,METRO_PRACTICE,60,1,60}},
-    {"Triplets",{90,METRO_METER_4_4,METRO_STRAIGHT,3,METRO_PRACTICE,60,1,60}},
-    {"Sixteenths",{80,METRO_METER_4_4,METRO_STRAIGHT,4,METRO_PRACTICE,60,1,60}},
-    {"Swing",{110,METRO_METER_4_4,METRO_SWING,2,METRO_PRACTICE,60,1,60}},
-    {"Offbeats",{100,METRO_METER_4_4,METRO_OFFBEAT,2,METRO_PRACTICE,60,1,60}},
-    {"Tresillo",{100,METRO_METER_4_4,METRO_TRESILLO,2,METRO_PRACTICE,60,1,60}},
-    {"Waltz",{100,METRO_METER_3_4,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60}},
-    {"Compound six",{90,METRO_METER_6_8,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60}},
-    {"Five: 2+3",{100,METRO_METER_5_8_23,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60}},
-    {"Seven: 2+2+3",{100,METRO_METER_7_8_223,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60}},
-    {"Eleven",{100,METRO_METER_11_8,METRO_STRAIGHT,1,METRO_PRACTICE,60,1,60}},
-    {"Keep: one silent bar",{100,METRO_METER_4_4,METRO_STRAIGHT,1,METRO_KEEP,60,1,60}},
-    {"Keep: three silent bars",{100,METRO_METER_4_4,METRO_STRAIGHT,1,METRO_KEEP,60,3,40}},
-    {"Fill missing beats",{100,METRO_METER_4_4,METRO_STRAIGHT,1,METRO_MISSING,60,1,60}},
-    {"Fill odd seven",{90,METRO_METER_7_8_223,METRO_STRAIGHT,1,METRO_MISSING,60,1,60}}
+    {"Quarter notes",{120,METRO_METER_4_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Eighth notes",{100,METRO_METER_4_4_EIGHTHS,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Triplets",{90,METRO_METER_4_4_TRIPLETS,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Sixteenths",{80,METRO_METER_4_4_SIXTEENTHS,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"March",{110,METRO_METER_2_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Waltz",{100,METRO_METER_3_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Compound six",{90,METRO_METER_6_8,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Five: 2+3",{100,METRO_METER_5_8_23,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Seven: 2+2+3",{100,METRO_METER_7_8_223,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Eleven",{100,METRO_METER_11_8,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Full bars 1/1",{100,METRO_METER_4_4,METRO_GAME,METRO_FULL_BARS,METRO_CYCLE_1_1,0}},
+    {"Full bars 2/2",{100,METRO_METER_4_4,METRO_GAME,METRO_FULL_BARS,METRO_CYCLE_2_2,0}},
+    {"Odds 1/1",{100,METRO_METER_4_4,METRO_GAME,METRO_ODDS,METRO_CYCLE_1_1,0}},
+    {"Evens 1/1",{100,METRO_METER_4_4,METRO_GAME,METRO_EVENS,METRO_CYCLE_1_1,0}},
+    {"Odds 2/2",{100,METRO_METER_7_8_223,METRO_GAME,METRO_ODDS,METRO_CYCLE_2_2,0}},
+    {"Evens 2/2",{100,METRO_METER_7_8_223,METRO_GAME,METRO_EVENS,METRO_CYCLE_2_2,0}}
 };
 #define METRO_FACTORY_COUNT (sizeof metro_factory/sizeof metro_factory[0])
 static volatile uint8_t metro_enabled,metro_request;
@@ -76,28 +86,50 @@ static uint8_t metro_crc(const uint8_t *p)
     }
     return (uint8_t)c;
 }
+static void metro_normalize(metro_settings_t *s)
+{
+    /* An even pulse needs at least two positions. Keep this degenerate
+     * one-pulse meter playable when selecting the Evens rule. */
+    if(s->mode==METRO_GAME && s->game==METRO_EVENS && metro_meters[s->meter].beats<2u)
+        s->meter=METRO_METER_2_4;
+}
 static void metro_pack(uint8_t *p,const metro_settings_t *s)
 {
-    p[0]='M';p[1]=1;p[2]=(uint8_t)s->bpm;p[3]=(uint8_t)(s->bpm>>8);
-    p[4]=s->meter;p[5]=(uint8_t)(s->pattern|(s->mode<<4));p[6]=s->sub;p[7]=(uint8_t)(s->offset+100);
-    p[8]=s->volume;p[9]=s->silent;p[10]=s->tolerance;p[11]=metro_crc(p);
+    p[0]='M';p[1]=2;p[2]=(uint8_t)s->bpm;p[3]=(uint8_t)(s->bpm>>8);
+    p[4]=s->meter;p[5]=(uint8_t)(s->game|(s->mode<<4));p[6]=METRO_SUBDIVISION;p[7]=(uint8_t)(s->offset+100);
+    p[8]=METRO_CLICK_VOLUME;p[9]=s->cycle;p[10]=METRO_WINDOW_MS;p[11]=metro_crc(p);
 }
 static int metro_unpack(metro_settings_t *s,const uint8_t *p)
 {
     uint32_t bpm=p[2]|((uint32_t)p[3]<<8);
-    if(p[0]!='M' || p[1]!=1u || p[11]!=metro_crc(p) || bpm<30u || bpm>300u ||
-       p[4]>=METRO_METERS_COUNT || (p[5]&15u)>=METRO_PATTERNS_COUNT || (p[5]>>4)>=METRO_MODES_COUNT || p[6]<1u || p[6]>4u ||
-       p[7]>200u || p[8]>100u || p[9]<1u || p[9]>4u || p[10]<10u || p[10]>150u)return 0;
-    s->bpm=(uint16_t)bpm;s->meter=p[4];s->pattern=p[5]&15u;s->sub=p[6];s->mode=p[5]>>4;s->offset=(int8_t)((int32_t)p[7]-100);
-    s->volume=p[8];s->silent=p[9];s->tolerance=p[10];return 1;
+    if(p[0]!='M' || (p[1]!=1u && p[1]!=2u) || p[11]!=metro_crc(p) || bpm<30u || bpm>300u || p[7]>200u)return 0;
+    metro_settings_t next=metro_default;
+    next.bpm=(uint16_t)bpm;next.meter=p[4];next.offset=(int8_t)((int32_t)p[7]-100);
+    if(p[1]==1u) {
+        if(p[4]>=METRO_LEGACY_METERS || (p[5]&15u)>=METRO_LEGACY_PATTERNS || (p[5]>>4)>=METRO_LEGACY_MODES ||
+           p[6]<1u || p[6]>4u || p[8]>100u || p[9]<1u || p[9]>4u || p[10]<10u || p[10]>150u)return 0;
+        next.mode=(p[5]>>4)?METRO_GAME:METRO_PRACTICE;
+        next.game=(p[5]>>4)==2u?METRO_EVENS:METRO_FULL_BARS;
+        next.cycle=p[9]>1u?METRO_CYCLE_2_2:METRO_CYCLE_1_1;
+        if(next.meter==METRO_METER_4_4 && !(p[5]&15u) && p[6]>1u)
+            next.meter=(uint8_t)(METRO_METER_4_4_EIGHTHS+p[6]-2u);
+        if(next.meter==METRO_METER_1_4)next.game=METRO_FULL_BARS;
+    } else {
+        if(p[4]>=METRO_METERS_COUNT || (p[5]&15u)>=METRO_GAMES_COUNT || (p[5]>>4)>=METRO_MODES_COUNT ||
+           p[6]!=METRO_SUBDIVISION || p[8]!=METRO_CLICK_VOLUME || p[9]>=METRO_CYCLES_COUNT || p[10]!=METRO_WINDOW_MS)return 0;
+        next.mode=p[5]>>4;next.game=p[5]&15u;next.cycle=p[9];
+    }
+    metro_normalize(&next);*s=next;return 1;
 }
-static uint32_t metro_sub(const metro_settings_t *s)
-{ return s->mode!=METRO_PRACTICE?1u:s->pattern==METRO_SWING?3u:s->pattern==METRO_STRAIGHT?s->sub:2u; }
+static int metro_hidden_bar(uint32_t bar,const metro_settings_t *s)
+{
+    uint32_t bars=s->cycle==METRO_CYCLE_2_2?2u:1u;
+    return bar && bar<=METRO_GAME_BARS && (bar-1u)%(bars*2u)>=bars;
+}
 static int metro_target(uint32_t bar,uint32_t beat,const metro_settings_t *s)
 {
-    if(!bar || bar>METRO_GAME_BARS)return 0;
-    if(s->mode==METRO_KEEP)return (bar-1u)%(s->silent+1u)!=0u;
-    return s->mode==METRO_MISSING && ((beat&1u) || metro_meters[s->meter].beats==1u);
+    if(s->mode!=METRO_GAME || !metro_hidden_bar(bar,s))return 0;
+    return s->game==METRO_FULL_BARS || (s->game==METRO_ODDS?!(beat&1u):!!(beat&1u));
 }
 /* Main/UI-only result calculation. Timing credit falls linearly to zero at
  * the matching window; misses and extra taps enlarge the denominator. */
@@ -111,13 +143,14 @@ static uint32_t metro_grade(uint32_t hits,uint32_t targets,uint32_t extra,uint32
 static void metro_restart(void)
 {
     metro.cfg=metro_settings;
+    metro_normalize(&metro.cfg);
     metro.input_delay=(int32_t)metro.cfg.offset*(int32_t)FS/1000;
     const metro_meter_t *m=&metro_meters[metro.cfg.meter];
     metro.start=metro.now+FS/5u;metro.next=metro.start;metro.pulse=metro.carry=0;
-    metro.den=(uint32_t)metro.cfg.bpm*m->den*metro_sub(&metro.cfg);
+    metro.den=(uint32_t)metro.cfg.bpm*m->den;
     metro.period=FS*240u/metro.den;metro.rem=FS*240u%metro.den;
     /* Never match a tap to more than half a beat, even at fast 16th meters. */
-    metro.window=FS*(uint32_t)metro.cfg.tolerance/1000u;
+    metro.window=FS*METRO_WINDOW_MS/1000u;
     uint32_t half=(FS*240u/((uint32_t)metro.cfg.bpm*m->den)-1u)/2u;
     if(metro.window>half)metro.window=half;
     metro.targets=metro.judge=0;metro.hits=metro.extra=metro.misses=0;
@@ -203,18 +236,15 @@ static int32_t metro_sample(void)
             metro.state=METRO_RESULT;metro.click_left=0;metro.version++;
         } else if((int32_t)(now-metro.next)>=0) {
             const metro_meter_t *m=&metro_meters[metro.cfg.meter];
-            uint32_t sub=metro_sub(&metro.cfg),beat=metro.pulse/sub,part=metro.pulse%sub;
+            uint32_t beat=metro.pulse;
             metro.beat=(uint8_t)(beat%m->beats);metro.bar=(uint8_t)(beat/m->beats);
             metro.state=metro.bar?METRO_RUNNING:METRO_COUNTIN;
             int sound=1;
-            if(metro.cfg.mode!=METRO_PRACTICE) sound=metro.bar<=METRO_GAME_BARS && !metro_target(metro.bar,metro.beat,&metro.cfg);
-            else if(metro.cfg.pattern==METRO_OFFBEAT)sound=part==1u;
-            else if(metro.cfg.pattern==METRO_SWING)sound=part!=1u;
-            else if(metro.cfg.pattern==METRO_TRESILLO) {uint32_t p=metro.pulse%8u;sound=p==0u || p==3u || p==6u;}
+            if(metro.cfg.mode==METRO_GAME) sound=metro.bar<=METRO_GAME_BARS && !metro_target(metro.bar,metro.beat,&metro.cfg);
             if(sound) {
-                uint32_t accent=!part && (m->accents&(1u<<metro.beat));
-                metro.click_left=256;metro.click_phase=0;metro.click_pitch=(uint8_t)(accent?8u:part?20u:13u);
-                metro.click_gain=(uint8_t)(metro.cfg.volume*(accent?4u:part?1u:2u)/4u);
+                uint32_t accent=m->accents&(1u<<metro.beat);
+                metro.click_left=256;metro.click_phase=0;metro.click_pitch=(uint8_t)(accent?8u:13u);
+                metro.click_gain=(uint8_t)(accent?METRO_CLICK_VOLUME:METRO_CLICK_VOLUME/2u);
             }
             metro.pulse++;metro.next+=metro.period;metro.carry+=metro.rem;
             if(metro.carry>=metro.den) {metro.carry-=metro.den;metro.next++;}

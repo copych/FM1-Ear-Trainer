@@ -16,20 +16,20 @@ function restore(p) {
   new Uint8Array(ex.memory.buffer,ex.web_metro_settings(),60).set(p);
   return ex.web_metro_settings_restore();
 }
-const saved=prefs();saved[2]=100;saved[3]=0;saved[5]=2<<4;saved[11]=crc(saved);
+const saved=prefs();saved[2]=100;saved[3]=0;saved[5]=(1<<4)|2;saved[11]=crc(saved);
 assert.equal(restore(saved),1);
 assert.equal(ex.web_metro_action(99),0);assert.equal(ex.web_metro_action(1),0);
 assert.equal(ex.web_metro_action(0),1);assert.equal(ex.web_ear_action(0),0);
 assert.equal(restore(saved),0,'active metronome cannot import preferences');
-// 0.2 s prepare + 2.4 s count-in; tap beat 2 and 4 of each scored bar.
-for(let bar=0;bar<8;bar++)for(const beat of [1,3]) {
-  runTo(200+(4+bar*4+beat)*600);
+// Evens in hidden bars 2/4/6/8; audible bars remain fully played guides.
+for(let bar=0;bar<4;bar++)for(const beat of [1,3]) {
+  runTo(200+(8+bar*8+beat)*600);
   ex.web_midi_in(0x90,60,100);ex.web_render(128);
   ex.web_midi_in(0x80,60,0);ex.web_render(128);
 }
 runTo(23000);
 assert.equal(ex.web_metro_metric(0),3,'round ends in results');
-assert.equal(ex.web_metro_metric(2),16);assert.equal(ex.web_metro_metric(3),16);
+assert.equal(ex.web_metro_metric(2),8);assert.equal(ex.web_metro_metric(3),8);
 assert.equal(ex.web_metro_metric(4),0);assert.equal(ex.web_metro_metric(5),0);
 assert(ex.web_metro_metric(1)>=90,'on-time MIDI taps earn high timing score');
 assert(ex.web_metro_metric(6)<6,'WASM scheduling error under six milliseconds in fixture');
@@ -52,11 +52,11 @@ for(let k=0;k<300;k++) {
 }
 assert(peak>.01,'WASM produces audible metronome clicks through the real mixer');
 console.log('WASM metronome PASS: audible clicks, eight-bar MIDI scoring, exclusivity, user preset save, fresh-instance restore and corrupt records');
-// One firmware menu launches and returns from all four activities.
+// One firmware menu launches and returns from all three activities.
 ex=await boot();assert.equal(ex.web_training_open(),1);assert.equal(ex.web_training_menu(),1);
 assert.equal(ex.web_ear_action(0),0);assert.equal(ex.web_metro_action(0),0);
 const button=id=>{ex.web_buttons(1<<id);ex.web_render(128);ex.web_buttons(0);ex.web_render(128);};
-for(let choice=0;choice<4;choice++) {
+for(let choice=0;choice<3;choice++) {
   if(choice) {ex.web_encoder(0,1);ex.web_render(128);}
   button(12);assert.equal(ex.web_training_menu(),0);assert.equal(ex.web_training_active(),1);
   assert.equal(ex.web_ear_active(),choice===0?1:0);assert.equal(ex.web_metro_active(),choice===0?0:1);
@@ -64,4 +64,4 @@ for(let choice=0;choice<4;choice++) {
   button(8);assert.equal(ex.web_training_menu(),1);assert.equal(ex.web_ear_active(),0);assert.equal(ex.web_metro_active(),0);
 }
 button(8);assert.equal(ex.web_training_menu(),0);assert.equal(ex.web_training_active(),0);
-console.log('WASM training menu PASS: pitch/metronome/keep/missing activity selection and HOME return/exit');
+console.log('WASM training menu PASS: pitch/metronome/unified rhythm selection and HOME return/exit');

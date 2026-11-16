@@ -36,8 +36,7 @@ int main(void)
         assert(!training_menu_open && training_session);
         assert(ear_enabled==(choice==TRAINING_PITCH));assert(metro_enabled==(choice!=TRAINING_PITCH));
         events_block(CTL);
-        if(choice!=TRAINING_PITCH)assert(metro.cfg.mode==(choice==TRAINING_METRONOME?METRO_PRACTICE:
-            choice==TRAINING_KEEP?METRO_KEEP:METRO_MISSING));
+        if(choice!=TRAINING_PITCH)assert(metro.cfg.mode==(choice==TRAINING_METRONOME?METRO_PRACTICE:METRO_GAME));
         training_press(B_HOME);assert(training_menu_open);
         uint32_t exiting=choice==TRAINING_PITCH?ear_request:metro_request;
         assert(exiting==(choice==TRAINING_PITCH?EAR_CMD_EXIT:METRO_CMD_EXIT));
@@ -56,6 +55,6 @@ int main(void)
     fm1_in.buttons=home;training_press(B_REC);fm1_in.buttons=0;
     assert(metro_enabled && !training_session);events_block(CTL);
     training_press(B_HOME);events_block(CTL);assert(!metro_enabled && !training_menu_open);
-    puts("training menu: real HOME+PLAY, silent input, all four activities, audio exit handshake, HOME/back, bounds and direct rhythm shortcut PASS");
+    puts("training menu: pitch/metronome/unified rhythm game, silent input, audio exit handshake, HOME/back, bounds and shortcut PASS");
     return 0;
 }

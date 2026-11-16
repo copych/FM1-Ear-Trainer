@@ -5,9 +5,9 @@
 #include <assert.h>
 static void advance_to(uint32_t at)
 { while((int32_t)(at-metro.now)>0)(void)metro_sample(); }
-static void begin(uint32_t mode)
+static void begin(uint32_t game)
 {
-    metro_settings=metro_default;metro_settings.mode=(uint8_t)mode;
+    metro_settings=metro_default;metro_settings.mode=METRO_GAME;metro_settings.game=(uint8_t)game;
     metro_enabled=1;metro_restart();
 }
 static void finish(void)
@@ -34,19 +34,18 @@ int main(void)
     shot("metro-countin");
     metro_ui_input(1u<<panel.btn[B_PLAY]);metro_commands();assert(metro.state==METRO_STOPPED);
     metro_ui_input(1u<<panel.btn[B_PLAY]);metro_commands();assert(metro.state==METRO_COUNTIN);
-    metro_settings.offset=-100;metro_settings.meter=17;metro_settings.bpm=300;metro_page=1;shot("metro-options");
-    metro_settings=metro_default;metro_page=0;metro_restart();
+    metro_settings.offset=-100;metro_settings.meter=METRO_METER_4_4_SIXTEENTHS;
+    metro_settings.bpm=300;metro_settings.game=METRO_EVENS;metro_settings.cycle=METRO_CYCLE_2_2;shot("metro-options");
+    metro_settings=metro_default;metro_restart();
     /* Quarter-note tap tempo: one tap does nothing, four intervals average. */
     metro.tap_valid=0;metro_settings.bpm=90;metro_tempo_tap();assert(metro_settings.bpm==90);
     for(uint32_t k=0;k<4u;k++) {advance_to(metro.now+FS/2u);metro_tempo_tap();assert(metro_settings.bpm==120);}
     advance_to(metro.now+FS*3u/5u);metro_tempo_tap();assert(metro_settings.bpm==114u);
     advance_to(metro.now+FS*3u);metro_tempo_tap();assert(!metro.tap_count);
     /* Fractional scheduling stays within a sample, across all meters, rates,
-     * patterns and subdivisions, including a wrapping 32-bit clock. */
-    for(uint32_t m=0;m<METRO_METERS_COUNT;m++)for(uint32_t p=0;p<METRO_PATTERNS_COUNT;p++)
-    for(uint32_t sub=1;sub<=4u;sub++) {
+     * pulse grids, including a wrapping 32-bit clock. */
+    for(uint32_t m=0;m<METRO_METERS_COUNT;m++) {
         metro_settings=metro_default;metro_settings.bpm=137;metro_settings.meter=(uint8_t)m;
-        metro_settings.pattern=(uint8_t)p;metro_settings.sub=(uint8_t)sub;
         metro.now=0xFFFFF000u;metro_restart();
         for(uint32_t k=0;k<30u;k++) {
             uint32_t expected=metro.start+(uint32_t)(((uint64_t)k*FS*240u)/metro.den);
@@ -54,29 +53,49 @@ int main(void)
             assert(metro.pulse==k+1u);
         }
     }
-    begin(METRO_PRACTICE);advance_to(metro.start);assert(metro_sample()!=0);
-    metro_settings.volume=0;metro_restart();advance_to(metro.start);
-    for(uint32_t k=0;k<1000u;k++)assert(metro_sample()==0);
+    metro_settings=metro_default;metro_restart();advance_to(metro.start);assert(metro_sample()!=0);
+    /* Check rendered clicks, including the remaining audible odd-meter
+     * pulses, against the rules without using the target predicate. */
+    for(uint32_t game=0;game<METRO_GAMES_COUNT;game++)for(uint32_t cycle=0;cycle<METRO_CYCLES_COUNT;cycle++) {
+        begin(game);metro_settings.meter=METRO_METER_7_8_223;
+        metro_settings.cycle=(uint8_t)cycle;metro_restart();uint32_t span=cycle?2u:1u;
+        for(uint32_t bar=0;bar<=8u;bar++)for(uint32_t beat=0;beat<7u;beat++) {
+            int hidden=bar && (bar-1u)%(span*2u)>=span;
+            int silent=hidden && (game==METRO_FULL_BARS || (game==METRO_ODDS?!(beat&1u):(beat&1u)));
+            advance_to(metro.start+(bar*7u+beat)*FS/4u);
+            assert((metro_sample()!=0)==!silent);
+        }
+    }
     /* Exact taps yield no misses/bias/jitter. Targets are unique and count
      * only silent beats, not heard guide beats or count-in. */
-    for(uint32_t mode=METRO_KEEP;mode<=METRO_MISSING;mode++) {
-        begin(mode);assert(metro.targets==16u);
+    for(uint32_t game=0;game<METRO_GAMES_COUNT;game++)for(uint32_t cycle=0;cycle<METRO_CYCLES_COUNT;cycle++) {
+        begin(game);metro_settings.cycle=(uint8_t)cycle;metro_restart();
+        uint32_t expected=game==METRO_FULL_BARS?16u:8u;assert(metro.targets==expected);
+        /* Independent schedule: count-in, then 1/1 or 2/2 guide/hidden bars. */
+        uint32_t target=0,span=cycle?2u:1u;
+        for(uint32_t bar=0;bar<=8u;bar++)for(uint32_t beat=0;beat<4u;beat++) {
+            int wanted=bar && ((bar-1u)%(span*2u)>=span) &&
+                (game==METRO_FULL_BARS || (game==METRO_ODDS?!(beat&1u):(beat&1u)));
+            assert(metro_target(bar,beat,&metro_settings)==wanted);
+            if(wanted)assert(metro_targets[target++].at==metro.start+(bar*4u+beat)*FS/2u);
+        }
+        assert(target==expected);
         metro_tap();assert(!metro.hits && !metro.extra);
         for(uint32_t k=0;k<metro.targets;k++) {advance_to(metro_targets[k].at);metro_tap();}
-        finish();assert(metro.hits==16u && !metro.misses && !metro.extra && !metro.abs_ms && !metro.bias_ms);
+        finish();assert(metro.hits==expected && !metro.misses && !metro.extra && !metro.abs_ms && !metro.bias_ms);
     }
     /* Captured browser times remain accurate despite delivery after the
      * audible event; the grace changes expiration, never the match window. */
-    begin(METRO_KEEP);metro.input_grace=FS/2u;
+    begin(METRO_FULL_BARS);metro.input_grace=FS/2u;
     uint32_t captured=metro_targets[0].at;
     advance_to(captured+FS/4u);metro_tap_at(captured);
     assert(metro.hits==1u && !metro.misses && !metro.abs_ms);
     metro.input_grace=0;finish();
-    begin(METRO_KEEP);captured=metro_targets[0].at;
+    begin(METRO_FULL_BARS);captured=metro_targets[0].at;
     advance_to(captured+metro.window+2u);assert(metro.misses==1u);
     metro_tap_at(captured);assert(!metro.hits && metro.misses==1u && metro.extra==1u);
     /* Alternate 20 ms early/late; duplicate taps can't inflate a score. */
-    begin(METRO_MISSING);
+    begin(METRO_FULL_BARS);
     for(uint32_t k=0;k<metro.targets;k++) {
         advance_to(metro_targets[k].at+(k&1u?FS/50u:0u-FS/50u));metro_tap();
         metro_tap();
@@ -95,7 +114,7 @@ int main(void)
      * must not already have been counted as missed. Negative correction is
      * supported, including the early first answer across the count-in. */
     for(int32_t offset=-100;offset<=100;offset+=200) {
-        metro_settings=metro_default;metro_settings.mode=METRO_MISSING;
+        metro_settings=metro_default;metro_settings.mode=METRO_GAME;
         metro_settings.meter=18;metro_settings.offset=(int8_t)offset;metro_restart();
         for(uint32_t k=0;k<metro.targets;k++) {
             advance_to(metro_targets[k].at+(offset*(int32_t)FS/1000));metro_tap();
@@ -103,30 +122,36 @@ int main(void)
         advance_to(metro.end+metro.window+FS/5u);assert(metro.state==METRO_RESULT);
         assert(metro.hits==metro.targets && !metro.misses && !metro.abs_ms);
     }
-    begin(METRO_KEEP);finish();assert(metro.misses==metro.targets && !metro.hits);
+    begin(METRO_FULL_BARS);finish();assert(metro.misses==metro.targets && !metro.hits);
     /* Worst meter and strict nearest-beat window, late misses, odd missing
      * patterns and the single beat meter all have finite target counts. */
-    for(uint32_t m=0;m<METRO_METERS_COUNT;m++)for(uint32_t mode=METRO_KEEP;mode<=METRO_MISSING;mode++) {
-        metro_settings=metro_default;metro_settings.mode=(uint8_t)mode;
-        metro_settings.bpm=300;metro_settings.meter=(uint8_t)m;metro_settings.tolerance=150;
-        metro_settings.silent=4;metro_restart();assert(metro.targets && metro.targets<=METRO_TARGETS_MAX);
+    for(uint32_t m=0;m<METRO_METERS_COUNT;m++)for(uint32_t game=0;game<METRO_GAMES_COUNT;game++)
+    for(uint32_t cycle=0;cycle<METRO_CYCLES_COUNT;cycle++) {
+        begin(game);metro_settings.bpm=300;metro_settings.meter=(uint8_t)m;
+        metro_settings.cycle=(uint8_t)cycle;metro_restart();assert(metro.targets && metro.targets<=METRO_TARGETS_MAX);
+        uint32_t beats=metro_meters[metro.cfg.meter].beats;
+        assert(metro.targets==4u*(game==METRO_FULL_BARS?beats:game==METRO_ODDS?(beats+1u)/2u:beats/2u));
         for(uint32_t k=0;k<metro.targets;k++) {advance_to(metro_targets[k].at);metro_tap();}
         finish();assert(metro.hits==metro.targets && !metro.misses);
     }
     /* Local keyboard and MIDI edge ownership: holds/repeated note-ons aren't
      * more taps; same pitch on a separate source is an independent tap. */
-    begin(METRO_MISSING);advance_to(metro_targets[0].at);
+    begin(METRO_FULL_BARS);advance_to(metro_targets[0].at);
     fm1_in.notes=1;keyboard_block();assert(metro.hits==1u);keyboard_block();assert(!metro.extra);
     fm1_in.notes=0;keyboard_block();fm1_in.notes=1;keyboard_block();assert(metro.extra==1u);
     ear_midi(0x90,0,60,100,1);ear_midi(0x90,0,60,100,1);assert(metro.extra==2u);
     ear_midi(0x90,0,60,100,2);assert(metro.extra==3u);
     ear_source_lost(1);ear_source_lost(2);fm1_in.notes=0;keyboard_block();
-    /* Real controls select settings page, save a personal preset and load it. */
-    metro_page=0;host_enc[panel.enc[EN_SELECT]]=1;metro_ui_input(0);assert(metro_page==1u);
-    host_enc[panel.enc[EN_K1]]=2;metro_ui_input(0);assert(metro_settings.sub==3u);
-    metro_preset=METRO_FACTORY_COUNT;metro_ui_input(1u<<panel.btn[B_OCTUP]);assert(metro_user[0].sub==3u);
+    /* SELECT cannot change the one-page knob mapping. */
+    metro_settings=metro_default;metro_settings.mode=METRO_GAME;
+    host_enc[panel.enc[EN_SELECT]]=1;host_enc[panel.enc[EN_K1]]=2;metro_ui_input(0);assert(metro_settings.bpm==122u);
+    host_enc[panel.enc[EN_K2]]=METRO_METER_4_4_SIXTEENTHS;
+    host_enc[panel.enc[EN_K3]]=METRO_EVENS;host_enc[panel.enc[EN_K4]]=METRO_CYCLE_2_2;
+    metro_ui_input(0);assert(metro_settings.meter==METRO_METER_4_4_SIXTEENTHS && metro_settings.game==METRO_EVENS && metro_settings.cycle==METRO_CYCLE_2_2);
+    metro_preset=METRO_FACTORY_COUNT;metro_ui_input(1u<<panel.btn[B_OCTUP]);assert(metro_user[0].game==METRO_EVENS);
+    host_enc[panel.enc[EN_PRESET]]=-METRO_FACTORY_COUNT;metro_ui_input(0);assert(metro_settings.mode==METRO_GAME);
     metro_ui_exit();metro_commands();assert(!metro_enabled && metro.state==METRO_STOPPED && !metro_sample());
     assert(ear_ui_start());ear_publish(EAR_CMD_EXIT);ear_audio_tick(CTL);assert(!ear_enabled);
-    puts("metronome: gestures, fractional clock/wrap, tap tempo, all meters/patterns/subdivisions, gain, scoring, misses/extras and input ownership PASS");
+    puts("metronome: one-page controls, all grids/games/cycles, fractional clock/wrap, tap tempo, scoring, misses/extras and input ownership PASS");
     return 0;
 }

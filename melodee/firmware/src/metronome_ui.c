@@ -2,7 +2,7 @@
  * Copyright (C) 2026 Kerem Kilic (Ellic Studio) */
 /* Main-loop adapter, included after ear_ui.c. Reuses its track isolation and
  * restoration slots; the two activities cannot run simultaneously. */
-static uint8_t metro_page,metro_preset,metro_custom;
+static uint8_t metro_preset,metro_custom;
 static uint16_t metro_seen_bpm=120;
 static void metro_publish(uint32_t cmd)
 { fm1_irq_off();metro_request=(uint8_t)cmd;fm1_irq_on();ui.force=1; }
@@ -12,12 +12,13 @@ static int metro_ui_start(void)
     if(ear_enabled || song.playing || transport_busy() || boot_work.state)return 0;
     ear_saved_sel=song.sel;ear_saved_rec=song.rec;ear_saved_solo=(uint8_t)track_solo;
     fm1_irq_off();
+    metro_normalize(&metro_settings);
     for(uint32_t k=0;k<NTRK;k++) {ear_saved_mute[k]=(uint8_t)trk[k].p[P_MUTE];trk[k].p[P_MUTE]=1;}
     transport_req=2;song.rec=0;track_solo=0;panic_req=(uint8_t)((1u<<NTRK)-1u);
     audition_request=0;if(audition_active)audition_stop();
     for(uint32_t k=0;k<27u;k++)kb_note[k]=KB_SILENT;
     metro_enabled=1;metro_request=METRO_CMD_RESTART;
-    fm1_irq_on();metro_seen_bpm=metro_settings.bpm;metro_page=0;metro_custom=1;ui.force=1;return 1;
+    fm1_irq_on();metro_seen_bpm=metro_settings.bpm;metro_custom=1;ui.force=1;return 1;
 }
 static void metro_ui_exit(void)
 {
@@ -41,9 +42,8 @@ static int metro_ui_input(uint32_t pressed)
     if((pressed&(1u<<panel.btn[B_REC])) && (fm1_in.buttons&home))return metro_ui_start();
     if(!metro_enabled)return 0;
     int32_t d[4];for(uint32_t k=0;k<4u;k++)d[k]=panel_enc(EN_K1+k);
-    int32_t preset=panel_enc(EN_PRESET),page=panel_enc(EN_SELECT),offset=panel_enc(EN_ALGO);
+    int32_t preset=panel_enc(EN_PRESET),offset=panel_enc(EN_ALGO);
     for(uint32_t k=0;k<NE;k++)(void)panel_enc(k);
-    if(page) {metro_page=(uint8_t)clamp((int32_t)metro_page+page,0,1);ui.force=1;}
     if(metro_seen_bpm!=metro_settings.bpm)metro_ui_changed();
     if(offset) {
         fm1_irq_off();metro_settings.offset=(int8_t)clamp((int32_t)metro_settings.offset+offset,-100,100);fm1_irq_on();
@@ -52,27 +52,23 @@ static int metro_ui_input(uint32_t pressed)
     if(preset) {
         metro_preset=(uint8_t)clamp((int32_t)metro_preset+preset,0,METRO_FACTORY_COUNT+METRO_USER_COUNT-1u);
         fm1_irq_off();
+        uint8_t activity=metro_settings.mode;
         if(metro_preset<METRO_FACTORY_COUNT) {
             int8_t correction=metro_settings.offset;metro_settings=metro_factory[metro_preset].settings;metro_settings.offset=correction;
         }
         else if(metro_user[metro_preset-METRO_FACTORY_COUNT].bpm)metro_settings=metro_user[metro_preset-METRO_FACTORY_COUNT];
+        metro_settings.mode=activity;metro_normalize(&metro_settings);
         fm1_irq_on();
         metro_ui_changed();
         metro_custom=0;
     }
     if(d[0] || d[1] || d[2] || d[3]) {
         fm1_irq_off();
-        if(!metro_page) {
-            metro_settings.bpm=(uint16_t)clamp((int32_t)metro_settings.bpm+d[0],30,300);
-            metro_settings.meter=(uint8_t)clamp((int32_t)metro_settings.meter+d[1],0,METRO_METERS_COUNT-1u);
-            metro_settings.pattern=(uint8_t)clamp((int32_t)metro_settings.pattern+d[2],0,METRO_PATTERNS_COUNT-1);
-            metro_settings.mode=(uint8_t)clamp((int32_t)metro_settings.mode+d[3],0,METRO_MODES_COUNT-1);
-        } else {
-            metro_settings.sub=(uint8_t)clamp((int32_t)metro_settings.sub+d[0],1,4);
-            metro_settings.volume=(uint8_t)clamp((int32_t)metro_settings.volume+d[1]*5,0,100);
-            metro_settings.silent=(uint8_t)clamp((int32_t)metro_settings.silent+d[2],1,4);
-            metro_settings.tolerance=(uint8_t)clamp((int32_t)metro_settings.tolerance+d[3]*5,10,150);
-        }
+        metro_settings.bpm=(uint16_t)clamp((int32_t)metro_settings.bpm+d[0],30,300);
+        metro_settings.meter=(uint8_t)clamp((int32_t)metro_settings.meter+d[1],0,METRO_METERS_COUNT-1);
+        metro_settings.game=(uint8_t)clamp((int32_t)metro_settings.game+d[2],0,METRO_GAMES_COUNT-1);
+        metro_settings.cycle=(uint8_t)clamp((int32_t)metro_settings.cycle+d[3],0,METRO_CYCLES_COUNT-1);
+        metro_normalize(&metro_settings);
         fm1_irq_on();metro_ui_changed();
     }
     if(pressed&home)metro_ui_exit();
@@ -117,25 +113,22 @@ static void metro_ui_draw(void)
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,T_BG);
         if(!band) {
-            cv_text(8,0,TY_LB,s.mode==METRO_PRACTICE?"METRO":s.mode==METRO_KEEP?"KEEP":"FILL",T_THEME);
+            cv_text(8,0,TY_LB,s.mode==METRO_PRACTICE?"METRO":"RHYTHM",T_THEME);
             const char *status=state==METRO_STOPPED?"STOPPED":state==METRO_COUNTIN?"COUNT IN":
                 state==METRO_RESULT?"RESULT":s.mode==METRO_PRACTICE?"PLAYING":"TAP SILENCE";
             cv_text_r(232,0,TY_LB,status,T_TEXT,T_BG);
-            str_cpy(label,metro_page?"PAGE 2/2  OFS ":"PAGE 1/2  OFS ",sizeof label);
-            fmt_int(label+14,s.offset);str_cpy(label+str_len(label),"ms",3);
+            str_cpy(label,"REC TAP  OFS ",sizeof label);
+            fmt_int(label+str_len(label),s.offset);str_cpy(label+str_len(label),"ms",3);
             cv_text_c(120,24,TY_LB,label,T_DIM,T_BG);
         } else if(band==1) {
             for(uint32_t k=0;k<4u;k++) {
                 int32_t x=(int32_t)k*60;
-                const char *caption=!metro_page?(k==0?"BPM":k==1?"MTR":k==2?"PAT":"MODE"):
-                    (k==0?"SUB":k==1?"VOL":k==2?"MUTE":"+/-ms");
+                const char *caption=k==0?"TEMPO":k==1?"METER":k==2?"GAME":"A/H";
                 cv_text_c(x+30,0,ty_fit(TY_LB,caption,58),caption,T_DIM,T_BG);
-                if(!metro_page) {
-                    if(!k)fmt_int(label,s.bpm);
-                    else if(k==1)str_cpy(label,m->name,sizeof label);
-                    else if(k==2)str_cpy(label,s.pattern==METRO_STRAIGHT?"REG":s.pattern==METRO_OFFBEAT?"OFF":s.pattern==METRO_SWING?"SWNG":"3:3:2",sizeof label);
-                    else str_cpy(label,s.mode==METRO_PRACTICE?"FREE":s.mode==METRO_KEEP?"KEEP":"FILL",sizeof label);
-                } else fmt_int(label,k==0?s.sub:k==1?s.volume:k==2?s.silent:s.tolerance);
+                if(!k)fmt_int(label,s.bpm);
+                else if(k==1)str_cpy(label,m->name,sizeof label);
+                else if(k==2)str_cpy(label,s.game==METRO_FULL_BARS?"FULL":s.game==METRO_ODDS?"ODDS":"EVENS",sizeof label);
+                else str_cpy(label,s.cycle==METRO_CYCLE_1_1?"1/1":"2/2",sizeof label);
                 cv_text_c(x+30,23,TY_LB,label,T_TEXT,T_BG);
             }
         } else if(band==2) {
@@ -156,7 +149,7 @@ static void metro_ui_draw(void)
                 cv_text_c(120,25,ty_fit(TY_LB,label,232),label,T_TEXT,T_BG);
             } else {
                 /* No phase/bar/playhead hints during the scored section. */
-                cv_text_c(120,0,TY_TX,s.mode==METRO_KEEP?"KEEP YOUR PULSE":"FILL THE GAPS",T_TEXT,T_BG);
+                cv_text_c(120,0,TY_TX,s.game==METRO_FULL_BARS?"FULL BARS":s.game==METRO_ODDS?"ODD PULSES":"EVEN PULSES",T_TEXT,T_BG);
                 cv_text_c(120,26,TY_LB,"KEY / MIDI: TAP",T_DIM,T_BG);
             }
         } else if(band==3) {

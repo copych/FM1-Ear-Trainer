@@ -10,6 +10,7 @@ static int metro_ui_start(void)
 {
     if(metro_enabled)return 1;
     if(ear_enabled || song.playing || transport_busy() || boot_work.state)return 0;
+    metro_hat_prepare(); /* main-only coefficient setup, before audio enable */
     ear_saved_sel=song.sel;ear_saved_rec=song.rec;ear_saved_solo=(uint8_t)track_solo;
     fm1_irq_off();
     metro_normalize(&metro_settings);
@@ -54,7 +55,8 @@ static int metro_ui_input(uint32_t pressed)
         fm1_irq_off();
         uint8_t activity=metro_settings.mode;
         if(metro_preset<METRO_FACTORY_COUNT) {
-            int8_t correction=metro_settings.offset;metro_settings=metro_factory[metro_preset].settings;metro_settings.offset=correction;
+            int8_t correction=metro_settings.offset;uint8_t sound=metro_settings.sound;
+            metro_settings=metro_factory[metro_preset].settings;metro_settings.offset=correction;metro_settings.sound=sound;
         }
         else if(metro_user[metro_preset-METRO_FACTORY_COUNT].bpm)metro_settings=metro_user[metro_preset-METRO_FACTORY_COUNT];
         metro_settings.mode=activity;metro_normalize(&metro_settings);
@@ -62,12 +64,16 @@ static int metro_ui_input(uint32_t pressed)
         metro_ui_changed();
         metro_custom=0;
     }
-    if(d[0] || d[1] || d[2] || d[3]) {
+    if(d[0] || d[1] || d[2] || (metro_settings.mode==METRO_GAME && d[3])) {
         fm1_irq_off();
         metro_settings.bpm=(uint16_t)clamp((int32_t)metro_settings.bpm+d[0],30,300);
         metro_settings.meter=(uint8_t)clamp((int32_t)metro_settings.meter+d[1],0,METRO_METERS_COUNT-1);
-        metro_settings.game=(uint8_t)clamp((int32_t)metro_settings.game+d[2],0,METRO_GAMES_COUNT-1);
-        metro_settings.cycle=(uint8_t)clamp((int32_t)metro_settings.cycle+d[3],0,METRO_CYCLES_COUNT-1);
+        if(metro_settings.mode==METRO_PRACTICE)
+            metro_settings.sound=(uint8_t)clamp((int32_t)metro_settings.sound+d[2],0,METRO_SOUNDS_COUNT-1);
+        else {
+            metro_settings.game=(uint8_t)clamp((int32_t)metro_settings.game+d[2],0,METRO_GAMES_COUNT-1);
+            metro_settings.cycle=(uint8_t)clamp((int32_t)metro_settings.cycle+d[3],0,METRO_CYCLES_COUNT-1);
+        }
         metro_normalize(&metro_settings);
         fm1_irq_on();metro_ui_changed();
     }
@@ -148,11 +154,13 @@ static void metro_ui_draw(void)
             cv_text_c(120,24,TY_LB,label,T_DIM,T_BG);
         } else if(band==1) {
             for(uint32_t k=0;k<4u;k++) {
+                if(s.mode==METRO_PRACTICE && k==3u)continue;
                 int32_t x=(int32_t)k*60;
-                const char *caption=k==0?"TEMPO":k==1?"METER":k==2?"GAME":"A/H";
+                const char *caption=k==0?"TEMPO":k==1?"METER":k==2?(s.mode==METRO_PRACTICE?"SOUND":"GAME"):"A/H";
                 cv_text_c(x+30,0,ty_fit(TY_LB,caption,58),caption,T_DIM,T_BG);
                 if(!k)fmt_int(label,s.bpm);
                 else if(k==1)str_cpy(label,m->name,sizeof label);
+                else if(k==2 && s.mode==METRO_PRACTICE)str_cpy(label,s.sound==METRO_SOUND_CLICK?"CLICK":s.sound==METRO_SOUND_808?"808":s.sound==METRO_SOUND_CR78?"CR78":"FM",sizeof label);
                 else if(k==2)str_cpy(label,s.game==METRO_FULL_BARS?"FULL":s.game==METRO_ODDS?"ODDS":"EVENS",sizeof label);
                 else str_cpy(label,s.cycle==METRO_CYCLE_1_1?"1/1":"2/2",sizeof label);
                 cv_text_c(x+30,23,TY_LB,label,T_TEXT,T_BG);
@@ -181,7 +189,7 @@ static void metro_ui_draw(void)
         } else if(band==3) {
             if(s.mode==METRO_PRACTICE) {
                 cv_text_c(120,0,TY_LB,"REC: TAP TEMPO",T_TEXT,T_BG);
-                cv_text_c(120,26,TY_LB,"QUARTER-NOTE BPM",T_DIM,T_BG);
+                cv_text_c(120,26,TY_LB,s.sound==METRO_SOUND_CLICK?"QUARTER-NOTE BPM":"STRONG OH / OTHERS CH",T_DIM,T_BG);
             } else {
                 str_cpy(label,"ERROR ",sizeof label);fmt_int(label+6,hits?(int32_t)(abs_ms/hits):0);
                 uint32_t at=str_len(label);str_cpy(label+at,"ms  SD ",8);fmt_int(label+at+7,(int32_t)metro_deviation(hits,bias,square_ms));

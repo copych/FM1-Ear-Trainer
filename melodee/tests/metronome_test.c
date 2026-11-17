@@ -205,6 +205,41 @@ int main(void)
     metro_ui_input(0);assert(metro_settings.meter==METRO_METER_4_4_SIXTEENTHS && metro_settings.game==METRO_EVENS && metro_settings.cycle==METRO_CYCLE_2_2);
     metro_preset=METRO_FACTORY_COUNT;metro_ui_input(1u<<panel.btn[B_OCTUP]);assert(metro_user[0].game==METRO_EVENS);
     host_enc[panel.enc[EN_PRESET]]=-METRO_FACTORY_COUNT;metro_ui_input(0);assert(metro_settings.mode==METRO_GAME);
+    /* Plain metronome replaces game knobs with four sounds. Kit generation
+     * uses isolated voices and scratch, without changing any track patch. */
+    int16_t patch_before[NTRK][P_COUNT];for(uint32_t t=0;t<NTRK;t++)memcpy(patch_before[t],trk[t].p,sizeof patch_before[t]);
+    metro_hat_prepare();metro_settings.mode=METRO_PRACTICE;metro_settings.sound=METRO_SOUND_CLICK;
+    host_enc[panel.enc[EN_K3]]=3;host_enc[panel.enc[EN_K4]]=1;metro_ui_input(0);
+    assert(metro_settings.sound==METRO_SOUND_FM && metro_settings.game==METRO_FULL_BARS && metro_settings.cycle==METRO_CYCLE_1_1);
+    metro_commands();assert(metro.state==METRO_RUNNING && metro.cfg.sound==METRO_SOUND_FM);
+    shot("metro-fm-sound");
+    uint32_t fingerprints[METRO_SOUNDS_COUNT-1u][2];
+    for(uint32_t sound=METRO_SOUND_808;sound<METRO_SOUNDS_COUNT;sound++) {
+        uint64_t energy[2]={0,0};uint32_t length[2]={0,0};
+        for(uint32_t hat=0;hat<2u;hat++) {
+            metro_hat_clear();metro_hat_trigger(sound,!hat);uint32_t hash=2166136261u;int32_t peak=0;
+            for(uint32_t i=0;i<FS;i++) {
+                int32_t x=metro_hat_sample(),a=x<0?-x:x;if(a>peak)peak=a;
+                energy[hat]+=(uint64_t)a*a;hash=(hash^(uint32_t)x)*16777619u;
+                if(a>10)length[hat]=i;
+            }
+            assert(energy[hat]>1000000u && peak<65536);fingerprints[sound-1u][hat]=hash;
+            printf("hat kit %u %s: peak %d, audible samples %u\n",sound,hat?"CH":"OH",peak,length[hat]);
+        }
+        assert(length[0]>length[1] && fingerprints[sound-1u][0]!=fingerprints[sound-1u][1]);
+        for(uint32_t other=1;other<sound;other++)assert(fingerprints[sound-1u][0]!=fingerprints[other-1u][0]);
+        /* The meter chooses OH only on its actual strong/group positions. */
+        metro_settings.sound=(uint8_t)sound;metro_settings.meter=METRO_METER_7_8_223;metro_restart();
+        for(uint32_t pulse=0;pulse<7u;pulse++) {
+            advance_to(metro.next);(void)metro_sample();
+            assert(metro_hats.kit==sound && !metro.click_left);
+            if(sound==METRO_SOUND_808)assert(metro_hats.voice.analog.ins==((21u>>pulse)&1u?DR_OH:DR_CH));
+            else assert(metro_hats.voice.lane.sound==((21u>>pulse)&1u?D9_OH:D9_CH));
+        }
+    }
+    for(uint32_t t=0;t<NTRK;t++)assert(!memcmp(patch_before[t],trk[t].p,sizeof patch_before[t]));
+    metro_settings.sound=METRO_SOUND_FM;metro_settings.mode=METRO_GAME;metro_restart();(void)metro_sample();
+    assert(metro.click_left && !metro_hats.active); /* games retain their familiar click */
     metro_ui_exit();metro_commands();assert(!metro_enabled && metro.state==METRO_STOPPED && !metro_sample());
     assert(ear_ui_start());ear_publish(EAR_CMD_EXIT);ear_audio_tick(CTL);assert(!ear_enabled);
     puts("metronome: one-page controls, all grids/games/cycles, fractional clock/wrap, tap tempo, scoring, misses/extras and input ownership PASS");

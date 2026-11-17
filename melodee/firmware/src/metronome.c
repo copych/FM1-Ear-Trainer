@@ -7,6 +7,7 @@
 enum eMetroMode { METRO_PRACTICE=0, METRO_GAME=1, METRO_MODES_COUNT };
 enum eMetroGame { METRO_FULL_BARS=0, METRO_ODDS=1, METRO_EVENS=2, METRO_GAMES_COUNT };
 enum eMetroCycle { METRO_CYCLE_1_1=0, METRO_CYCLE_2_2=1, METRO_CYCLES_COUNT };
+enum eMetroSound { METRO_SOUND_CLICK=0, METRO_SOUND_808=1, METRO_SOUND_CR78=2, METRO_SOUND_FM=3, METRO_SOUNDS_COUNT };
 enum eMetroMeter { METRO_METER_4_4=0, METRO_METER_2_4=1, METRO_METER_3_4=2,
     METRO_METER_6_8=3, METRO_METER_9_8=4, METRO_METER_12_8=5,
     METRO_METER_5_8_23=6, METRO_METER_5_8_32=7, METRO_METER_7_8_223=8,
@@ -46,7 +47,7 @@ _Static_assert(METRO_GAME_BARS%4u==0u && METRO_TARGETS_MAX>=64u && METRO_TARGETS
 _Static_assert(METRO_GAME_BARS*16u<=0xFFFFFFFFu/(FS*240u),"sample schedule multiplication overflows");
 enum { METRO_CLICK_VOLUME=100, METRO_SUBDIVISION=1, METRO_WINDOW_MS=60,
        METRO_LEGACY_METERS=19, METRO_LEGACY_PATTERNS=4, METRO_LEGACY_MODES=3 };
-typedef struct { uint16_t bpm; uint8_t meter,mode,game,cycle; int8_t offset; } metro_settings_t;
+typedef struct { uint16_t bpm; uint8_t meter,mode,game,cycle; int8_t offset; uint8_t sound; } metro_settings_t;
 static const metro_settings_t metro_default={120,METRO_METER_4_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0};
 static metro_settings_t metro_settings={120,METRO_METER_4_4,METRO_PRACTICE,METRO_FULL_BARS,METRO_CYCLE_1_1,0};
 static metro_settings_t metro_user[METRO_USER_COUNT]; /* zero BPM = empty */
@@ -79,6 +80,7 @@ static struct {
     uint8_t state,beat,bar,judge,targets,tap_count,tap_valid,tap_index,click_pitch,click_gain,feedback;
 } metro;
 static struct { uint32_t at; uint8_t hit; } metro_targets[METRO_TARGETS_MAX] __attribute__((section(".pool")));
+#include "metronome_hats.c"
 static uint8_t metro_crc(const uint8_t *p)
 {
     uint32_t c=0;
@@ -96,14 +98,14 @@ static void metro_normalize(metro_settings_t *s)
 }
 static void metro_pack(uint8_t *p,const metro_settings_t *s)
 {
-    p[0]='M';p[1]=2;p[2]=(uint8_t)s->bpm;p[3]=(uint8_t)(s->bpm>>8);
-    p[4]=s->meter;p[5]=(uint8_t)(s->game|(s->mode<<4));p[6]=METRO_SUBDIVISION;p[7]=(uint8_t)(s->offset+100);
+    p[0]='M';p[1]=3;p[2]=(uint8_t)s->bpm;p[3]=(uint8_t)(s->bpm>>8);
+    p[4]=s->meter;p[5]=(uint8_t)(s->game|(s->mode<<4));p[6]=(uint8_t)(METRO_SUBDIVISION|(s->sound<<4));p[7]=(uint8_t)(s->offset+100);
     p[8]=METRO_CLICK_VOLUME;p[9]=s->cycle;p[10]=METRO_WINDOW_MS;p[11]=metro_crc(p);
 }
 static int metro_unpack(metro_settings_t *s,const uint8_t *p)
 {
     uint32_t bpm=p[2]|((uint32_t)p[3]<<8);
-    if(p[0]!='M' || (p[1]!=1u && p[1]!=2u) || p[11]!=metro_crc(p) || bpm<30u || bpm>300u || p[7]>200u)return 0;
+    if(p[0]!='M' || p[1]<1u || p[1]>3u || p[11]!=metro_crc(p) || bpm<30u || bpm>300u || p[7]>200u)return 0;
     metro_settings_t next=metro_default;
     next.bpm=(uint16_t)bpm;next.meter=p[4];next.offset=(int8_t)((int32_t)p[7]-100);
     if(p[1]==1u) {
@@ -117,8 +119,10 @@ static int metro_unpack(metro_settings_t *s,const uint8_t *p)
         if(next.meter==METRO_METER_1_4)next.game=METRO_FULL_BARS;
     } else {
         if(p[4]>=METRO_METERS_COUNT || (p[5]&15u)>=METRO_GAMES_COUNT || (p[5]>>4)>=METRO_MODES_COUNT ||
-           p[6]!=METRO_SUBDIVISION || p[8]!=METRO_CLICK_VOLUME || p[9]>=METRO_CYCLES_COUNT || p[10]!=METRO_WINDOW_MS)return 0;
+           (p[6]&15u)!=METRO_SUBDIVISION || (p[6]>>4)>=(p[1]==2u?1u:METRO_SOUNDS_COUNT) ||
+           p[8]!=METRO_CLICK_VOLUME || p[9]>=METRO_CYCLES_COUNT || p[10]!=METRO_WINDOW_MS)return 0;
         next.mode=p[5]>>4;next.game=p[5]&15u;next.cycle=p[9];
+        next.sound=p[6]>>4;
     }
     metro_normalize(&next);*s=next;return 1;
 }
@@ -144,6 +148,7 @@ static uint32_t metro_grade(uint32_t hits,uint32_t targets,uint32_t extra,uint32
 static void metro_restart(void)
 {
     metro.cfg=metro_settings;
+    metro_hat_clear();
     metro_normalize(&metro.cfg);
     metro.input_delay=(int32_t)metro.cfg.offset*(int32_t)FS/1000;
     const metro_meter_t *m=&metro_meters[metro.cfg.meter];
@@ -215,10 +220,10 @@ static void metro_tempo_tap(void)
 static void metro_commands(void)
 {
     uint32_t c=metro_request;metro_request=METRO_CMD_NONE;
-    if(c==METRO_CMD_EXIT) {metro.state=METRO_STOPPED;metro.click_left=metro.tap_left=0;metro.feedback=METRO_FEEDBACK_NONE;metro_enabled=0;metro.tap_valid=0;}
+    if(c==METRO_CMD_EXIT) {metro.state=METRO_STOPPED;metro.click_left=metro.tap_left=0;metro_hat_clear();metro.feedback=METRO_FEEDBACK_NONE;metro_enabled=0;metro.tap_valid=0;}
     else if(c==METRO_CMD_RESTART)metro_restart();
     else if(c==METRO_CMD_TOGGLE) {
-        if(metro.state==METRO_AUDIBLE || metro.state==METRO_RUNNING) {metro.state=METRO_STOPPED;metro.click_left=metro.tap_left=0;metro.feedback=METRO_FEEDBACK_NONE;metro.version++;}
+        if(metro.state==METRO_AUDIBLE || metro.state==METRO_RUNNING) {metro.state=METRO_STOPPED;metro.click_left=metro.tap_left=0;metro_hat_clear();metro.feedback=METRO_FEEDBACK_NONE;metro.version++;}
         else metro_restart();
     } else if(c==METRO_CMD_TAP)metro_tempo_tap();
 }
@@ -251,15 +256,19 @@ static int32_t metro_sample(void)
             if(metro.cfg.mode==METRO_GAME) sound=metro.bar<=METRO_GAME_BARS && !metro_target(metro.bar,metro.beat,&metro.cfg);
             if(sound) {
                 uint32_t accent=m->accents&(1u<<metro.beat);
-                metro.click_left=512;metro.click_phase=0;metro.click_pitch=(uint8_t)(accent?8u:13u);
-                metro.click_gain=(uint8_t)(accent?METRO_CLICK_VOLUME*7u/5u:METRO_CLICK_VOLUME);
+                if(metro.cfg.mode==METRO_PRACTICE && metro.cfg.sound!=METRO_SOUND_CLICK)
+                    metro_hat_trigger(metro.cfg.sound,accent!=0u);
+                else {
+                    metro.click_left=512;metro.click_phase=0;metro.click_pitch=(uint8_t)(accent?8u:13u);
+                    metro.click_gain=(uint8_t)(accent?METRO_CLICK_VOLUME*7u/5u:METRO_CLICK_VOLUME);
+                }
             }
             metro.pulse++;metro.next+=metro.period;metro.carry+=metro.rem;
             if(metro.carry>=metro.den) {metro.carry-=metro.den;metro.next++;}
             metro.version++;
         }
     }
-    int32_t result=0;
+    int32_t result=metro_hat_sample();
     if(metro.click_left) {
         int32_t amp=(int32_t)(metro.click_left*metro.click_gain)/4;
         metro.click_left--;metro.click_phase++;

@@ -78,3 +78,24 @@ for(let choice=0;choice<3;choice++) {
 }
 button(8);assert.equal(ex.web_training_menu(),0);assert.equal(ex.web_training_active(),0);
 console.log('WASM training menu PASS: pitch/metronome/unified rhythm selection and HOME return/exit');
+// K3 is SOUND only in plain metronome. All four choices render distinct
+// actual-mixer waveforms; K4 cannot silently change the saved game cycle.
+const soundHashes=[];
+for(let sound=0;sound<4;sound++) {
+  ex=await boot();assert.equal(ex.web_metro_action(0),1);
+  ex.web_encoder(4,sound);ex.web_encoder(5,1);ex.web_render(128);
+  const selected=prefs();assert.equal(selected[1],3);assert.equal(selected[6]>>4,sound);assert.equal(selected[9],0);
+  let hash=2166136261,level=0;
+  for(let block=0;block<520;block++) {
+    ex.web_render(128);
+    for(const x of new Float32Array(ex.memory.buffer,ex.web_out_l(),128)) {
+      assert(Number.isFinite(x) && Math.abs(x)<1);level=Math.max(level,Math.abs(x));
+      hash=Math.imul(hash^Math.round(x*65536),16777619)>>>0;
+    }
+  }
+  assert(level>.01);assert(!soundHashes.includes(hash));soundHashes.push(hash);
+  ex.web_metro_action(4);ex.web_render(128);ex=await boot();assert.equal(restore(selected),1);
+  assert.equal(prefs()[6]>>4,sound,'sound survives a fresh instance');
+  console.log(`Metronome sound ${sound}: peak ${level.toFixed(4)}, hash ${hash.toString(16)}`);
+}
+console.log('WASM metronome sounds PASS: click/808/CR78/FM, K3/K4 controls, distinct bounded output and restore');

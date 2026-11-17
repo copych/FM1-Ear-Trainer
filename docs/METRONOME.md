@@ -3,6 +3,52 @@
 The player controls are in the root README and `web/guide/index.html#metronome`.
 This is a development patch, not a hardware-qualified release.
 
+## Plain-metronome sound presets — 2026-11-17
+
+In plain Metronome, K3 now selects Click (the existing sound), 808, CR78 or FM.
+K4 is hidden/unused rather than changing game settings. The three kits use the
+existing DRUM synth voices: OH on the meter's strong/group accents, CH on other
+pulses, including subdivided grids. A new hat replaces/chokes the previous hat.
+Rhythm game retains its current click and K3 rule/K4 bar-cycle controls. Player
+tap audio remains the separate lower click. Factory setups preserve the sound;
+user slots save it.
+
+`metronome_hats.c` uses private trigger snapshots, one private voice, private
+808 scratch and a CTL-sized output buffer in SRAM (2,288 B total added pool).
+Main prepares coefficients once before publishing metro_enabled. Audio copies
+the selected OH/CH snapshot on an exact pulse and renders fixed 32-sample blocks
+as needed. It touches no song patch, track voice, shared kit scratch or resource
+allocator. CR78 and FM coefficient floating-point setup stays outside audio;
+their existing sample loops and the 808 render path use bounded integer DSP.
+SRAM snapshots have an explicit BSS readiness flag because pool memory has no
+boot-time zeroing guarantee. Restart, stop and exit discard pending hat audio.
+
+Wire records are version 3, still 12 bytes each / 60 total, in the same PER5
+locations. The sound ID occupies the high nibble of byte 6; its low nibble is
+still fixed subdivision 1. Explicit sound IDs are 0 Click, 1 808, 2 CR78, 3 FM.
+Versions 1 and 2 migrate to Click; version 2 rejects the new nibble rather than
+misinterpreting it. Browser storage writes v3 and falls back through v2/v1,
+retaining old keys. No flash layout or bootloader changes.
+
+Source baseline: 81a9b17. The first target attempt correctly failed the existing
+commit-marker image limit. The existing main-only minsize list now includes
+the training UI files, the metronome codec and one-time hat preparation. Sample
+render loops retain their existing optimization; no package limit was relaxed.
+
+| Compliance category | Status / evidence |
+| --- | --- |
+| Target / build / ABI | PASS for target compilation/checks: classic FM-1, nominal 44.1 kHz, CTL 32, I2S halves 128; existing pi32v2 Clang 4.0.1 r3 and SDK d179b4484759423312073f5fbb232501aa491047. `target` passes all size/manifest/SRAM/stack/peripheral checks. App 576,580 B fits the unchanged 577,248 B app+stub limit; package 668,948 B. Device bootloader identity UNKNOWN. |
+| Audio hot path / numerics | PASS for structural/generated-code review: on demand, ≤32 samples of existing integer kit DSP, fixed-size snapshot copy through resident memcpy, gain scaling and existing soft knee/master stage. `metro_sample` disassembly calls resident cr_run/fmk_run/dr8_run_into and memcpy; the SRAM closure check passes. No new float/math helper, allocation, storage, wait or unbounded loop in audio. Coefficient setup is main-only; physical cost UNVERIFIED. |
+| Execution ownership / synchronization | PASS for source/host review: main prepares immutable templates before enable; audio owns live voice, scratch/buffer and pulse events. IRQ-masked parameter/command publication retained. No shared track state, worker or queue changes; sound changes restart through the existing command path. |
+| Memory / storage / I/O | PASS for build/bounds/host checks: data+BSS 97,592/98,304 B; pool 137,460/357,888 B; audio arena 74,720 B (minimum 49,152); ISR stack audit 2,984 B. Fixed private buffers; no allocation or new I/O. Existing exit-only saves remain. Physical peak resource usage UNVERIFIED. |
+| Dependencies / includes / licenses | PASS: new adapter includes the existing GPL kit APIs through the current translation unit; no external dependency, sample recording or asset added. Existing kit files/credits remain untouched; adapter has Kerem Kilic/SPDX attribution. |
+| Compatibility / package / recovery | PASS for host/build scope: v1/v2→v3 sound-default migration, all four sounds in current/four user records, CRC/invalid-ID checks, independent corrupt slots, reboot and interrupted saves pass. Mode and metric IDs unchanged. Package/recovery-loader checks pass; physical install/rollback UNVERIFIED. |
+| Host functional validation | PASS: `metro-test`, `settings-test`, `training-test`, `web`, `web-test` and page input/control regression. Native kit waveforms differ, OH tails exceed CH, 7/8 OH/CH group mapping is checked, track patches survive, game click remains, and all timing tests pass. Actual WASM mixer peaks: Click 0.1942, 808 0.3914, CR78 0.2922, FM 0.2881; finite/distinct outputs below clipping, all sound choices restore in fresh instances and K4 cannot change a game cycle in practice. Plain sound-selector framebuffer visually reviewed. |
+| Hardware real-time validation | UNVERIFIED: no physical FM-1 timing, loudness or recovery run. Measure maximum ISR cost/headroom against ~2.90 ms, particularly 808 hats and rapid retriggers at 300 BPM/4/4 sixteenths, while redrawing and handling USB/TRS input. Check onset timing, OH→CH transitions, gain/clipping, patch restoration, sound/slot persistence, exit/reboot, palette readability and long active/idle soak before hardware qualification. |
+
+Local package SHA-256: `9cc815ba904c8cecb46abc3f819ecd092a618f792d5057a632b594784839268c`.
+No separate sanitizer, physical profiling or recovery exercise is claimed.
+
 ## Exit saves, tap audio and feedback — 2026-11-17
 
 The user identified the momentary display/key interruption as SAVING SETTINGS

@@ -3,7 +3,48 @@
 The player controls are in the root README and `web/guide/index.html#metronome`.
 This is a development patch, not a hardware-qualified release.
 
-## Unified rhythm game — current controls
+## Immediate guide bars and tap-window correction — 2026-11-17
+
+Current behavior supersedes the earlier count-in descriptions below. PLAY or
+restart immediately schedules the first audible guide pulse: there is no
+200 ms preparation gap and no separate precount bar. The complete round is
+eight bars: A/H/A/H/A/H/A/H for 1/1, or A/A/H/H/A/A/H/H for 2/2. LISTEN and
+the pulse display follow each audible bar; TAP SILENCE appears in hidden bars
+without moving phase hints. Guide taps, including in the first bar, are extras.
+Odds still means missing positions 1,3,5…; Evens means 2,4,6…, restarted each
+bar. Target indices and audible clicks use the same one-based bar cycle.
+
+The matching window stays nominally ±60 ms. Its non-overlap cap now uses the
+closest pair of actual targets, rather than the spacing between every grid
+pulse. At 300 BPM on 4/4 sixteenths, alternating targets permit just under
+±50 ms instead of the previous ±25 ms. Consecutive hidden odd-meter bars can
+put two odd targets on adjacent pulses across a bar boundary; the actual
+schedule correctly preserves the narrower cap in that case. No settings
+format or fixed-default values change.
+
+Baseline 6841a5a's native suite passed. A new start-immediately assertion then
+failed against that baseline (`metro.start==metro.now`); it passes after the
+change. Source review found no odd/even reversal. The extra initial guide bar
+is a plausible explanation for the reported Evens/120 BPM confusion, not a
+claim to have reproduced the user's exact playing session. At ordinary 4/4,
+120 BPM the original window was already ±60 ms.
+
+| Compliance category | Status / scope / evidence |
+| --- | --- |
+| Target / build / ABI | PASS for build: classic FM-1, nominal 44.1 kHz / CTL 32 / I2S half 128; unchanged Clang pi32v2 4.0.1 r3 and pinned SDK d179b4484759423312073f5fbb232501aa491047. `target` passed manifest, RAM/stack, peripheral-access and packaging checks; app 577,240 B, package 668,948 B. Physical bootloader identity UNKNOWN. |
+| Audio hot path / numerics | PASS for structural/generated-code audit: restart scans ≤128 candidate pulses and ≤64 targets; extra spacing calculation is bounded integer subtraction/shift/min in that existing control-block restart. `metro_sample` and its `metro_hidden_bar`/`metro_target` callees use integer operations and hardware division/bit operations, all linked in SRAM; no allocation, I/O, wait or floating/library helper added. Per-pulse phase selection adds a bounded helper call. Hardware cost unmeasured. |
+| Execution ownership / synchronization | PASS for source review: existing audio-owned clock/commands/targets and IRQ-masked main-loop settings publication retained. Browser captured event timestamps/grace and input ownership unchanged. Result wait stops scheduling new pulses at the eight-bar end. |
+| Memory / storage / I/O | PASS for static/build/host checks: data+BSS 97,560/98,304 B; pool 135,172/357,888 B; audio arena 77,440 B (minimum 49,152); ISR stack audit 2,984 B. No new buffers, storage writes or allocation. Deferred settings flash and existing 120-slot target pool unchanged. Physical peak usage UNVERIFIED. |
+| Dependencies / includes / licenses | PASS: no new dependencies, includes, assets or platform changes; GPL/SPDX and existing attribution retained. |
+| Compatibility / package / recovery | PASS for host/build checks: v1/v2 settings codec unchanged; settings/slots, CRC, reboot, deferred flash and interrupted A/B regression pass. State ID 1 now means audible guide bars rather than a separate precount; result ID 3 and 9-field metrics remain compatible. Container/loader checks retained. Physical installation/rollback UNVERIFIED; no flashing performed. |
+| Host functional validation | PASS: `metro-test`, `training-test`, `settings-test`, `web`, `web-test`, page control/input-clock regressions, `site` and served-site checks. All 22 grids × 3 rules × 2 cycles validate independent target positions and caps, with wrap/offset/input cases retained. Worklet/WASM: Evens/120 BPM accepts ±55 ms (8/8), rejects ±65 ms and opposite odd pulses (0/8); nonzero start, odd 7/8 at 137 BPM, fast 7/16/sixteenths, audio delays and short keys pass. Guide/hidden framebuffers were rendered and visually reviewed. |
+| Hardware real-time validation | UNVERIFIED: no physical FM-1 measurements or recovery exercise. Run the retained stress plan below: ISR latency/headroom against the ~2.90 ms half-buffer period, USB/TRS input/output latency, underruns, peak stack, rapid settings, speaker/headphone gain, deferred saves, cold boots, rollback and sustained soak. Host/WASM results do not establish device real-time safety. |
+
+No separate sanitizer or hardware performance run is claimed. Local firmware
+SHA-256: `8fdee697648abcc649f2a88af77636b6447cc0ca77391212b19d2ded2db0591b`.
+Only upstream-attested CI packages may be copied to public hosting.
+
+## Unified rhythm game — previous revision (2026-11-16)
 
 The shared menu now contains Pitch training, Metronome and Rhythm game.
 There is one settings page: K1 tempo, K2 meter/pulse grid, K3 Full bars /

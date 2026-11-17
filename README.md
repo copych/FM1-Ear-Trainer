@@ -31,7 +31,7 @@ Settings and ratings are saved. Leave training and let saving finish before swit
 
 Choose **Metronome** or **Rhythm game** from the shared training menu. **HOME + REC** remains a direct rhythm shortcut when outside training.
 
-One settings page offers 30–300 BPM and 22 meters/pulse grids, including odd groupings and 4/4 eighths, triplets and sixteenths. Volume stays at 100%, subdivision at 1, and the timing window at ±60 ms (capped below half a pulse at fast tempos). PRESETS offers 16 setups and four saved user slots.
+One settings page offers 30–300 BPM and 22 meters/pulse grids, including odd groupings and 4/4 eighths, triplets and sixteenths. Volume stays at 100%, subdivision at 1, and the timing window at ±60 ms (capped below half the spacing between required taps at fast tempos). PRESETS offers 16 setups and four saved user slots.
 
 | Control | What it does |
 | --- | --- |
@@ -44,12 +44,12 @@ One settings page offers 30–300 BPM and 22 meters/pulse grids, including odd g
 | Any keyboard key / MIDI note | Submit a game tap |
 | PRESETS | Load a factory setup or a saved user slot |
 | OCT+ | Save current settings into the selected user slot |
-| OCT- | Restart with a new count-in |
+| OCT- | Restart from the first audible guide bar |
 | ALGORITHM | Input timing correction −100 to +100 ms |
 | HOME | Return to the training menu and save settings/presets |
 
-**Rhythm game:** one audible count-in bar, then eight scored bars alternating audible and hidden bars (1/1 or 2/2). Tap only the missing pulses in hidden bars: **Full bars** hides all pulses; **Odds** hides 1, 3, 5…; **Evens** hides 2, 4, 6…. Other pulses stay audible. Numbering starts again each bar. Evens needs at least two pulses, so selecting it in 1/4 switches to 2/4. BPM always counts quarter notes. Metronome plays the selected grid continuously without scoring.
+**Rhythm game:** starts immediately with the audible guide bar(s), with no extra precount. Eight bars alternate audible and hidden bars (1/1 or 2/2). Tap only the missing pulses in hidden bars: **Full bars** hides all pulses; **Odds** hides 1, 3, 5…; **Evens** hides 2, 4, 6…. Other pulses stay audible. Numbering starts again each bar. Evens needs at least two pulses, so selecting it in 1/4 switches to 2/4. BPM always counts quarter notes. Metronome plays the selected grid continuously without scoring.
 
-Results show a timing-weighted score, hits, misses, extra taps, mean absolute error, signed early/late bias and timing consistency (SD). Game visuals hide the pulse after count-in. The browser aligns captured taps with the audio output clock automatically when supported; ALGORITHM adds a manual input correction (start at 0 ms). Use wired audio for consistent timing. See the [metronome guide](https://copych.github.io/feature-metronome-training-games/webapp/manual/#metronome) for details. Device settings save after leaving the screen; browser settings and user slots are remembered locally. Round results are session-only.
+Results show a timing-weighted score, hits, misses, extra taps, mean absolute error, signed early/late bias and timing consistency (SD). The header shows LISTEN in audible bars and TAP SILENCE in hidden bars; pulse visuals appear only in audible bars. The browser aligns captured taps with the audio output clock automatically when supported; ALGORITHM adds a manual input correction (start at 0 ms). Use wired audio for consistent timing. See the [metronome guide](https://copych.github.io/feature-metronome-training-games/webapp/manual/#metronome) for details. Device settings save after leaving the screen; browser settings and user slots are remembered locally. Round results are session-only.
 
 Built on [Melodee](https://github.com/keremimo/melodee), with FM6 and Prophet sounds. [GPL-3.0](LICENSE) · [Component licences](melodee/LICENSING.md) · [Development docs](docs/DEVELOPMENT.md). Independent project; not affiliated with M-VAVE.

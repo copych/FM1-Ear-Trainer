@@ -17,7 +17,7 @@ enum eMetroMeter { METRO_METER_4_4=0, METRO_METER_2_4=1, METRO_METER_3_4=2,
     METRO_METER_4_4_TRIPLETS=20, METRO_METER_4_4_SIXTEENTHS=21, METRO_METERS_COUNT };
 enum eMetroCommand { METRO_CMD_NONE, METRO_CMD_RESTART, METRO_CMD_TOGGLE,
     METRO_CMD_EXIT, METRO_CMD_TAP, METRO_COMMANDS_COUNT };
-enum eMetroState { METRO_STOPPED, METRO_COUNTIN, METRO_RUNNING, METRO_RESULT, METRO_STATES_COUNT };
+enum eMetroState { METRO_STOPPED, METRO_AUDIBLE, METRO_RUNNING, METRO_RESULT, METRO_STATES_COUNT };
 enum eMetroTargetState { METRO_TARGET_PENDING, METRO_TARGET_HIT, METRO_TARGET_MISSED, METRO_TARGET_STATES_COUNT };
 typedef struct { const char *name,*groups; uint8_t beats,den; uint16_t accents; } metro_meter_t;
 /* Accents identify group starts, including different ways to hear 5 and 7. */
@@ -42,7 +42,7 @@ _Static_assert(METRO_METERS_COUNT==sizeof metro_meters/sizeof metro_meters[0],"m
 #define METRO_TARGETS_MAX 120u
 #define METRO_GAME_BARS 8u
 _Static_assert(METRO_GAME_BARS%4u==0u && METRO_TARGETS_MAX>=64u && METRO_TARGETS_MAX<=255u,"review cycle target bounds");
-_Static_assert((METRO_GAME_BARS+1u)*16u<=0xFFFFFFFFu/(FS*240u),"sample schedule multiplication overflows");
+_Static_assert(METRO_GAME_BARS*16u<=0xFFFFFFFFu/(FS*240u),"sample schedule multiplication overflows");
 enum { METRO_CLICK_VOLUME=100, METRO_SUBDIVISION=1, METRO_WINDOW_MS=60,
        METRO_LEGACY_METERS=19, METRO_LEGACY_PATTERNS=4, METRO_LEGACY_MODES=3 };
 typedef struct { uint16_t bpm; uint8_t meter,mode,game,cycle; int8_t offset; } metro_settings_t;
@@ -146,34 +146,35 @@ static void metro_restart(void)
     metro_normalize(&metro.cfg);
     metro.input_delay=(int32_t)metro.cfg.offset*(int32_t)FS/1000;
     const metro_meter_t *m=&metro_meters[metro.cfg.meter];
-    metro.start=metro.now+FS/5u;metro.next=metro.start;metro.pulse=metro.carry=0;
+    metro.start=metro.now;metro.next=metro.start;metro.pulse=metro.carry=0;
     metro.den=(uint32_t)metro.cfg.bpm*m->den;
     metro.period=FS*240u/metro.den;metro.rem=FS*240u%metro.den;
-    /* Never match a tap to more than half a beat, even at fast 16th meters. */
+    /* Cap by actual neighboring targets, not the intervening audible pulses.
+     * Odd meters can put two odd targets next to one another across hidden
+     * bar boundaries, so use the generated schedule rather than a multiplier. */
     metro.window=FS*METRO_WINDOW_MS/1000u;
-    uint32_t half=(FS*240u/((uint32_t)metro.cfg.bpm*m->den)-1u)/2u;
-    if(metro.window>half)metro.window=half;
     metro.targets=metro.judge=0;metro.hits=metro.extra=metro.misses=0;
     metro.abs_ms=metro.square_ms=0;metro.bias_ms=metro.last_ms=0;
     uint32_t den=(uint32_t)metro.cfg.bpm*m->den;
     for(uint32_t b=1;b<=METRO_GAME_BARS;b++)for(uint32_t k=0;k<m->beats;k++)if(metro_target(b,k,&metro.cfg)) {
         uint32_t i=metro.targets++;
-        metro_targets[i].at=metro.start+((b*m->beats+k)*(FS*240u))/den;metro_targets[i].hit=METRO_TARGET_PENDING;
+        metro_targets[i].at=metro.start+(((b-1u)*m->beats+k)*(FS*240u))/den;metro_targets[i].hit=METRO_TARGET_PENDING;
+        if(i) {
+            uint32_t half=(metro_targets[i].at-metro_targets[i-1u].at-1u)/2u;
+            if(metro.window>half)metro.window=half;
+        }
     }
-    metro.end=metro.start+((METRO_GAME_BARS+1u)*m->beats*(FS*240u))/den;
-    metro.state=METRO_COUNTIN;metro.beat=metro.bar=0;metro.click_left=0;metro.version++;
+    metro.end=metro.start+(METRO_GAME_BARS*m->beats*(FS*240u))/den;
+    metro.state=metro.cfg.mode==METRO_PRACTICE?METRO_RUNNING:METRO_AUDIBLE;
+    metro.beat=0;metro.bar=1;metro.click_left=0;metro.version++;
 }
 /* Native input uses now; the browser supplies the captured audible sample
  * time so device/output latency and message delivery don't become tap error. */
 static void metro_tap_at(uint32_t input_time)
 {
     if(metro.cfg.mode==METRO_PRACTICE ||
-       (metro.state!=METRO_RUNNING && metro.state!=METRO_COUNTIN))return;
-    /* Allow an early first answer at the count-in boundary (notably 1/4).
-     * Taps earlier in the count-in have no effect on the score. */
+       (metro.state!=METRO_RUNNING && metro.state!=METRO_AUDIBLE))return;
     uint32_t tapped=input_time-metro.input_delay;
-    if(metro.state==METRO_COUNTIN && (!metro.targets ||
-       (int32_t)(tapped-metro_targets[0].at)<-(int32_t)metro.window))return;
     uint32_t best=METRO_TARGETS_MAX,distance=metro.window+1u;
     for(uint32_t k=0;k<metro.targets;k++)if(metro_targets[k].hit==METRO_TARGET_PENDING) {
         int32_t d=(int32_t)(tapped-metro_targets[k].at);
@@ -212,7 +213,7 @@ static void metro_commands(void)
     if(c==METRO_CMD_EXIT) {metro.state=METRO_STOPPED;metro.click_left=0;metro_enabled=0;metro.tap_valid=0;}
     else if(c==METRO_CMD_RESTART)metro_restart();
     else if(c==METRO_CMD_TOGGLE) {
-        if(metro.state==METRO_COUNTIN || metro.state==METRO_RUNNING) {metro.state=METRO_STOPPED;metro.click_left=0;metro.version++;}
+        if(metro.state==METRO_AUDIBLE || metro.state==METRO_RUNNING) {metro.state=METRO_STOPPED;metro.click_left=0;metro.version++;}
         else metro_restart();
     } else if(c==METRO_CMD_TAP)metro_tempo_tap();
 }
@@ -222,7 +223,7 @@ static int32_t metro_sample(void)
 {
     uint32_t now=metro.now++;
     if(!metro_enabled)return 0;
-    if(metro.state==METRO_COUNTIN || metro.state==METRO_RUNNING) {
+    if(metro.state==METRO_AUDIBLE || metro.state==METRO_RUNNING) {
         /* Browser-only grace allows audible-clock input messages to arrive.
          * Native input_grace stays zero; the matching window is unchanged. */
         uint32_t judged=now-metro.input_grace-(metro.input_delay>0?(uint32_t)metro.input_delay:0u);
@@ -234,11 +235,12 @@ static int32_t metro_sample(void)
         }
         if(metro.cfg.mode!=METRO_PRACTICE && (int32_t)(judged-metro.end)>(int32_t)metro.window) {
             metro.state=METRO_RESULT;metro.click_left=0;metro.version++;
-        } else if((int32_t)(now-metro.next)>=0) {
+        } else if((int32_t)(now-metro.next)>=0 &&
+                  (metro.cfg.mode==METRO_PRACTICE || (int32_t)(now-metro.end)<0)) {
             const metro_meter_t *m=&metro_meters[metro.cfg.meter];
             uint32_t beat=metro.pulse;
-            metro.beat=(uint8_t)(beat%m->beats);metro.bar=(uint8_t)(beat/m->beats);
-            metro.state=metro.bar?METRO_RUNNING:METRO_COUNTIN;
+            metro.beat=(uint8_t)(beat%m->beats);metro.bar=(uint8_t)(beat/m->beats+1u);
+            metro.state=metro.cfg.mode==METRO_GAME && !metro_hidden_bar(metro.bar,&metro.cfg)?METRO_AUDIBLE:METRO_RUNNING;
             int sound=1;
             if(metro.cfg.mode==METRO_GAME) sound=metro.bar<=METRO_GAME_BARS && !metro_target(metro.bar,metro.beat,&metro.cfg);
             if(sound) {

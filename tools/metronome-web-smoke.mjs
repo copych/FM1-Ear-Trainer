@@ -23,7 +23,7 @@ assert.equal(ex.web_metro_action(0),1);assert.equal(ex.web_ear_action(0),0);
 assert.equal(restore(saved),0,'active metronome cannot import preferences');
 // Evens in hidden bars 2/4/6/8; audible bars remain fully played guides.
 for(let bar=0;bar<4;bar++)for(const beat of [1,3]) {
-  runTo(200+(8+bar*8+beat)*600);
+  runTo((4+bar*8+beat)*600);
   ex.web_midi_in(0x90,60,100);ex.web_render(128);
   ex.web_midi_in(0x80,60,0);ex.web_render(128);
 }

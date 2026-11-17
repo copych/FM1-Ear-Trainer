@@ -114,7 +114,7 @@ static void metro_ui_draw(void)
         cv_begin(240,48,T_BG);
         if(!band) {
             cv_text(8,0,TY_LB,s.mode==METRO_PRACTICE?"METRO":"RHYTHM",T_THEME);
-            const char *status=state==METRO_STOPPED?"STOPPED":state==METRO_COUNTIN?"COUNT IN":
+            const char *status=state==METRO_STOPPED?"STOPPED":state==METRO_AUDIBLE?"LISTEN":
                 state==METRO_RESULT?"RESULT":s.mode==METRO_PRACTICE?"PLAYING":"TAP SILENCE";
             cv_text_r(232,0,TY_LB,status,T_TEXT,T_BG);
             str_cpy(label,"REC TAP  OFS ",sizeof label);
@@ -132,11 +132,11 @@ static void metro_ui_draw(void)
                 cv_text_c(x+30,23,TY_LB,label,T_TEXT,T_BG);
             }
         } else if(band==2) {
-            if(s.mode==METRO_PRACTICE || state==METRO_COUNTIN || state==METRO_STOPPED) {
+            if(s.mode==METRO_PRACTICE || state==METRO_AUDIBLE || state==METRO_STOPPED) {
                 cv_text_c(120,0,TY_TX,m->groups,T_TEXT,T_BG);
                 for(uint32_t k=0;k<m->beats;k++) {
                     int32_t w=224/(int32_t)m->beats,x=8+(int32_t)k*w;
-                    uint16_t c=(state==METRO_RUNNING || state==METRO_COUNTIN) && k==beat?T_THEME:T_PANEL;
+                    uint16_t c=(state==METRO_RUNNING || state==METRO_AUDIBLE) && k==beat?T_THEME:T_PANEL;
                     cv_rrect(x,29,w-2,12,2,c,T_BG);
                 }
             } else if(state==METRO_RESULT) {

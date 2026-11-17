@@ -19,6 +19,7 @@ enum eMetroCommand { METRO_CMD_NONE, METRO_CMD_RESTART, METRO_CMD_TOGGLE,
     METRO_CMD_EXIT, METRO_CMD_TAP, METRO_COMMANDS_COUNT };
 enum eMetroState { METRO_STOPPED, METRO_AUDIBLE, METRO_RUNNING, METRO_RESULT, METRO_STATES_COUNT };
 enum eMetroTargetState { METRO_TARGET_PENDING, METRO_TARGET_HIT, METRO_TARGET_MISSED, METRO_TARGET_STATES_COUNT };
+enum eMetroFeedback { METRO_FEEDBACK_NONE, METRO_FEEDBACK_GOOD, METRO_FEEDBACK_BAD, METRO_FEEDBACKS_COUNT };
 typedef struct { const char *name,*groups; uint8_t beats,den; uint16_t accents; } metro_meter_t;
 /* Accents identify group starts, including different ways to hear 5 and 7. */
 static const metro_meter_t metro_meters[]={
@@ -72,10 +73,10 @@ static volatile uint8_t metro_enabled,metro_request;
 static struct {
     metro_settings_t cfg;
     uint32_t now,start,next,period,rem,den,carry,pulse,end,tap_last,tap_sum,tap_intervals[4];
-    uint32_t window,version,abs_ms,square_ms,input_grace;
+    uint32_t window,version,abs_ms,square_ms,input_grace,feedback_at;
     int32_t bias_ms,last_ms,input_delay;
-    uint16_t extra,hits,misses,click_left,click_phase;
-    uint8_t state,beat,bar,judge,targets,tap_count,tap_valid,tap_index,click_pitch,click_gain;
+    uint16_t extra,hits,misses,click_left,click_phase,tap_left,tap_phase;
+    uint8_t state,beat,bar,judge,targets,tap_count,tap_valid,tap_index,click_pitch,click_gain,feedback;
 } metro;
 static struct { uint32_t at; uint8_t hit; } metro_targets[METRO_TARGETS_MAX] __attribute__((section(".pool")));
 static uint8_t metro_crc(const uint8_t *p)
@@ -166,14 +167,18 @@ static void metro_restart(void)
     }
     metro.end=metro.start+(METRO_GAME_BARS*m->beats*(FS*240u))/den;
     metro.state=metro.cfg.mode==METRO_PRACTICE?METRO_RUNNING:METRO_AUDIBLE;
-    metro.beat=0;metro.bar=1;metro.click_left=0;metro.version++;
+    metro.beat=0;metro.bar=1;metro.click_left=metro.tap_left=0;metro.feedback=METRO_FEEDBACK_NONE;metro.version++;
 }
 /* Native input uses now; the browser supplies the captured audible sample
  * time so device/output latency and message delivery don't become tap error. */
 static void metro_tap_at(uint32_t input_time)
 {
-    if(metro.cfg.mode==METRO_PRACTICE ||
-       (metro.state!=METRO_RUNNING && metro.state!=METRO_AUDIBLE))return;
+    if(metro.state!=METRO_RUNNING && metro.state!=METRO_AUDIBLE)return;
+    /* Input-owned edge, never an automatically scheduled beat. Separate
+     * envelope keeps a simultaneous guide click and player tap audible. */
+    metro.tap_left=384;metro.tap_phase=0;metro.feedback_at=metro.now;
+    metro.feedback=METRO_FEEDBACK_GOOD;metro.version++;
+    if(metro.cfg.mode==METRO_PRACTICE)return;
     uint32_t tapped=input_time-metro.input_delay;
     uint32_t best=METRO_TARGETS_MAX,distance=metro.window+1u;
     for(uint32_t k=0;k<metro.targets;k++)if(metro_targets[k].hit==METRO_TARGET_PENDING) {
@@ -181,7 +186,7 @@ static void metro_tap_at(uint32_t input_time)
         uint32_t a=(uint32_t)(d<0?-d:d);
         if(a<distance) {best=k;distance=a;}
     }
-    if(best==METRO_TARGETS_MAX) {if(metro.extra<999u)metro.extra++;metro.version++;return;}
+    if(best==METRO_TARGETS_MAX) {if(metro.extra<999u)metro.extra++;metro.feedback=METRO_FEEDBACK_BAD;return;}
     metro_targets[best].hit=METRO_TARGET_HIT;metro.hits++;
     int32_t d=(int32_t)(tapped-metro_targets[best].at);
     int32_t ms=d*1000/(int32_t)FS;
@@ -210,10 +215,10 @@ static void metro_tempo_tap(void)
 static void metro_commands(void)
 {
     uint32_t c=metro_request;metro_request=METRO_CMD_NONE;
-    if(c==METRO_CMD_EXIT) {metro.state=METRO_STOPPED;metro.click_left=0;metro_enabled=0;metro.tap_valid=0;}
+    if(c==METRO_CMD_EXIT) {metro.state=METRO_STOPPED;metro.click_left=metro.tap_left=0;metro.feedback=METRO_FEEDBACK_NONE;metro_enabled=0;metro.tap_valid=0;}
     else if(c==METRO_CMD_RESTART)metro_restart();
     else if(c==METRO_CMD_TOGGLE) {
-        if(metro.state==METRO_AUDIBLE || metro.state==METRO_RUNNING) {metro.state=METRO_STOPPED;metro.click_left=0;metro.version++;}
+        if(metro.state==METRO_AUDIBLE || metro.state==METRO_RUNNING) {metro.state=METRO_STOPPED;metro.click_left=metro.tap_left=0;metro.feedback=METRO_FEEDBACK_NONE;metro.version++;}
         else metro_restart();
     } else if(c==METRO_CMD_TAP)metro_tempo_tap();
 }
@@ -230,6 +235,7 @@ static int32_t metro_sample(void)
         if(metro.judge<metro.targets && (int32_t)(judged-metro_targets[metro.judge].at)>(int32_t)metro.window) {
             if(metro_targets[metro.judge].hit==METRO_TARGET_PENDING) {
                 metro_targets[metro.judge].hit=METRO_TARGET_MISSED;metro.misses++;
+                metro.feedback=METRO_FEEDBACK_BAD;metro.feedback_at=now;
             }
             metro.judge++;metro.version++;
         }
@@ -245,17 +251,26 @@ static int32_t metro_sample(void)
             if(metro.cfg.mode==METRO_GAME) sound=metro.bar<=METRO_GAME_BARS && !metro_target(metro.bar,metro.beat,&metro.cfg);
             if(sound) {
                 uint32_t accent=m->accents&(1u<<metro.beat);
-                metro.click_left=256;metro.click_phase=0;metro.click_pitch=(uint8_t)(accent?8u:13u);
-                metro.click_gain=(uint8_t)(accent?METRO_CLICK_VOLUME:METRO_CLICK_VOLUME/2u);
+                metro.click_left=512;metro.click_phase=0;metro.click_pitch=(uint8_t)(accent?8u:13u);
+                metro.click_gain=(uint8_t)(accent?METRO_CLICK_VOLUME*7u/5u:METRO_CLICK_VOLUME);
             }
             metro.pulse++;metro.next+=metro.period;metro.carry+=metro.rem;
             if(metro.carry>=metro.den) {metro.carry-=metro.den;metro.next++;}
             metro.version++;
         }
     }
-    if(!metro.click_left)return 0;
-    int32_t amp=(int32_t)(metro.click_left*metro.click_gain)/4;
-    metro.click_left--;metro.click_phase++;
-    if(metro.click_phase>=metro.click_pitch*2u)metro.click_phase=0;
-    return metro.click_phase<metro.click_pitch?amp:-amp;
+    int32_t result=0;
+    if(metro.click_left) {
+        int32_t amp=(int32_t)(metro.click_left*metro.click_gain)/4;
+        metro.click_left--;metro.click_phase++;
+        if(metro.click_phase>=metro.click_pitch*2u)metro.click_phase=0;
+        result=metro.click_phase<metro.click_pitch?amp:-amp;
+    }
+    if(metro.tap_left) {
+        int32_t amp=(int32_t)(metro.tap_left*96u)/4;
+        metro.tap_left--;metro.tap_phase++;
+        if(metro.tap_phase>=38u)metro.tap_phase=0;
+        result+=metro.tap_phase<19u?amp:-amp;
+    }
+    return result; /* peak <= 17,920 guide + 9,216 tap, before master limiter */
 }

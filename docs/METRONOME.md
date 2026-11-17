@@ -3,6 +3,56 @@
 The player controls are in the root README and `web/guide/index.html#metronome`.
 This is a development patch, not a hardware-qualified release.
 
+## Exit saves, tap audio and feedback — 2026-11-17
+
+The user identified the momentary display/key interruption as SAVING SETTINGS
+in slow-motion video. Source inspection matches that report: pitch training
+checkpointed dirty ratings once a minute, drew its saving screen, then ran a
+flash operation that masks interrupts. `settings_poll` now defers every settings
+write while either training activity is open, including quiet answer pauses
+and stopped metronome screens. Preferences/ratings remain queued/dirty and
+commit after the activity's audio-owned EXIT. Leave the activity and let saving
+finish before powering off; a power cut before exit loses unsaved session changes.
+The user's video is reported evidence, not a locally reproduced device measurement.
+
+Guide click envelopes now last 512 samples rather than 256, with strong/regular
+attack bounds 17,920 / 12,800 instead of 6,400 / 3,200 before the existing
+master processing (roughly +9 / +12 dB at the attack). Every actual key/MIDI
+tap during metronome playback triggers a separate 384-sample, lower-pitched
+click, including free practice and extras. A guide/tap overlap is bounded by
+27,136 before the master DC blocker/limiter/soft clip. Neither audio voice can
+submit an answer; judgments still consume only input edges. MASTER applies
+normally. No timer, allocation, storage or float operation was added to audio.
+
+A soft-edged background disc shrinks and fades for 400 ms: green on matched
+taps (neutral tap feedback in practice), red on extras/misses. It never pulses
+automatically at hidden beat times. Main-loop rendering reuses the five 48-row
+strips, existing text-over-image blending and RGB565 theme handling. Each disc
+uses at most 240 row iterations per screen, a bounded integer sqrt per visible
+row, span fills and fractional edge coverage; no per-pixel sqrt, supersampling
+or new framebuffer. Animation time is quantized to 30 Hz; normal status/input
+redraws can also occur. When the fade ends, static idle redraws stop again.
+
+All 27 musical keys now have uniform idle glow in the training menu, pitch
+training and metronome; existing accepted/held highlights stay bright. Global
+LIGHTS controls the idle intensity, including OFF. Uniform dimming reveals no
+hidden pitch. The host lighting fixture uses the real physical matrix mapping.
+
+| Compliance category | Status and evidence |
+| --- | --- |
+| Target / build / ABI | PASS for compilation/package checks: classic FM-1, 44.1 kHz nominal, CTL 32, 128-frame I2S half; existing pi32v2 Clang 4.0.1 r3, pinned SDK d179b4484759423312073f5fbb232501aa491047 and flags retained. `target` passed manifest, SRAM closure, stack, peripheral and package checks. App 577,220 B; FM-1_327008 package 668,948 B. Device bootloader identity UNKNOWN. |
+| Audio hot path / numerics | PASS for structural/generated-code audit: guide and tap are two bounded integer envelopes. Tap adds multiply/shift, counter/branch and sum; target disassembly has no new math/allocation/helper calls or per-sample division (existing meter division remains at pulse boundaries). Feedback writes are bounded stores on input/judgment. Circle rasterization is main-only. Device cycle costs UNVERIFIED. |
+| Execution ownership / synchronization | PASS for source/host review: runtime/feedback audio-owned; main snapshots under IRQ mask and draws outside it. Native MIDI/keys and same-thread browser captured input retain edge ownership. No worker, queue, locks or waits added. Flash is now excluded from both open activities; audio consumes EXIT before saving can resume. |
+| Memory / storage / I/O | PASS for static/build/host checks: data+BSS 97,544/98,304 B, pool 135,172/357,888 B, audio arena 77,152 B (minimum 49,152), ISR audit 2,980 B. Small envelope/event fields, no new buffers or peripherals. Host simulated >5 minute activity pauses cause zero flash erases; exit persists settings/ratings and reboot restores them. Hardware peak load/usage UNVERIFIED. |
+| Dependencies / includes / licenses | PASS: no dependencies/assets added, existing GPL/SPDX and source credits retained. Uses the existing renderer, LED planes and mixer. |
+| Compatibility / package / recovery | PASS for codec/build regression scope: no persistence or Web metric IDs changed; four slots, legacy records, neighbors and interrupted A/B saves retained. Save policy intentionally changes from quiet/minute checkpoints to activity exit, documented for power-off. Existing container/loader checks retained. Physical flashing and rollback UNVERIFIED. |
+| Host functional validation | PASS: `metro-test`, `training-test`, `settings-test`, `ui-test`, `web`, `web-test`, page input/control checks and framebuffer review. Louder/overlapping audio bound, tap events, decay colors, text-mode restore, all grids/rules/cycles, real-matrix idle glow, OFF and pressed highlights, no mid-training flash and exit/reboot pass. WASM real-mixer guide peak 0.2490, player tap 0.1370 (including codec -6 dB scaling), no clipping; one extra tap sounds but cannot produce a hit, and no generated audio creates answers. Captured-timestamp regressions retain exact hits under output latency. `site` and container/recovery checksum checks pass. |
+| Hardware real-time validation | UNVERIFIED: no local FM-1 soak, timing, output loudness or recovery measurement. Before hardware qualification measure both envelope cost and animated drawing under USB/TRS load, ISR headroom against ~2.90 ms, input/LED scan gaps, audio peaks/noise and LCD latency. Check >10 minutes of active/idle pitch/rhythm use without saving interruptions, exit saves/reboot, LIGHTS levels, all palettes, and recovery. |
+
+Local package SHA-256: `a2849ece63bb936c8f07f5bc0b8f29b8107134033a3f57733a5c5bceea127d8c`.
+No separate sanitizer or hardware performance result is claimed. Earlier silent-tap
+and minute-checkpoint descriptions below are historical and superseded here.
+
 ## Immediate guide bars and tap-window correction — 2026-11-17
 
 Current behavior supersedes the earlier count-in descriptions below. PLAY or

@@ -3,6 +3,15 @@
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 #include <assert.h>
+/* Populate the UI harness's tentative matrix with the real panel layout. */
+static const int8_t FM1_KEYMAP[6][FM1_NCOL]={
+    {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1},
+    {5,11,4,10,3,9,2,8,-1,-1,-1},
+    {34,35,36,37,38,40,39,13,7,6,12},
+    {23,24,25,26,27,28,29,30,31,32,33},
+    {0,1,15,14,17,16,19,18,20,21,22},
+    {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}
+};
 static void training_press(uint32_t button)
 {host_pressed=1u<<panel.btn[button];ui_input();}
 static void screenshot(void)
@@ -22,6 +31,11 @@ int main(void)
     uint32_t home=1u<<panel.btn[B_HOME];
     fm1_in.buttons=home;training_press(B_PLAY);fm1_in.buttons=0;
     assert(training_menu_open && training_session && !ear_enabled && !metro_enabled);
+    settings_lights=LIGHTS_MID;ui_leds();
+    for(uint32_t k=0;k<27u;k++)assert(led_get(fm1_led_dim[0],14u+k) && !led_get(fm1_led,14u+k));
+    settings_lights=LIGHTS_OFF;ui_leds();
+    for(uint32_t k=0;k<27u;k++)assert(!led_get(fm1_led_dim[0],14u+k));
+    settings_lights=LIGHTS_MID;
     screenshot();
     /* Opening the chooser silences the instrument, but raw input ownership
      * still follows held keys and MIDI sources across activity boundaries. */
@@ -37,6 +51,10 @@ int main(void)
         assert(ear_enabled==(choice==TRAINING_PITCH));assert(metro_enabled==(choice!=TRAINING_PITCH));
         events_block(CTL);
         if(choice!=TRAINING_PITCH)assert(metro.cfg.mode==(choice==TRAINING_METRONOME?METRO_PRACTICE:METRO_GAME));
+        ui_leds();for(uint32_t k=0;k<27u;k++)assert(led_get(fm1_led_dim[0],14u+k));
+        if(choice!=TRAINING_PITCH) {
+            fm1_in.notes=1u;ui_leds();assert(led_get(fm1_led,14u));fm1_in.notes=0;
+        }
         training_press(B_HOME);assert(training_menu_open);
         uint32_t exiting=choice==TRAINING_PITCH?ear_request:metro_request;
         assert(exiting==(choice==TRAINING_PITCH?EAR_CMD_EXIT:METRO_CMD_EXIT));

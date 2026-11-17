@@ -66,6 +66,21 @@ int main(void)
         }
     }
     metro_settings=metro_default;metro_restart();advance_to(metro.start);assert(metro_sample()!=0);
+    /* Stronger guide and distinct input click can overlap without clipping.
+     * Practice taps sound too; generated audio never submits an answer. */
+    metro_tap();assert(metro.tap_left && !metro.hits && !metro.extra);
+    int32_t peak=0;
+    for(uint32_t i=0;i<600u;i++) {int32_t x=metro_sample();if(x<0)x=-x;if(x>peak)peak=x;assert(x<=27136);}
+    assert(peak>25000 && !metro.tap_left && !metro.click_left);
+    /* Feedback comes from input/judgment only, decays without allocation,
+     * and text blending never leaks into the next screen. */
+    begin(METRO_FULL_BARS);assert(metro.feedback==METRO_FEEDBACK_NONE);
+    advance_to(metro_targets[0].at);(void)metro_sample();metro_tap();
+    assert(metro.feedback==METRO_FEEDBACK_GOOD && metro.tap_left);shot("metro-green");assert(!cv_over);
+    advance_to(metro.now+FS*3u/20u);shot("metro-green-decay");
+    advance_to(metro_targets[0].at+FS/4u);metro_tap();
+    assert(metro.feedback==METRO_FEEDBACK_BAD && metro.extra==1);shot("metro-red");
+    advance_to(metro.now+FS/2u);assert(!metro.tap_left);shot("metro-faded");
     /* Check rendered clicks, including the remaining audible odd-meter
      * pulses, against the rules without using the target predicate. */
     for(uint32_t game=0;game<METRO_GAMES_COUNT;game++)for(uint32_t cycle=0;cycle<METRO_CYCLES_COUNT;cycle++) {

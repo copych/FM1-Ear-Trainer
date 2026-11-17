@@ -50,7 +50,20 @@ for(let k=0;k<300;k++) {
   ex.web_render(128);
   for(const x of new Float32Array(ex.memory.buffer,ex.web_out_l(),128)) {assert(Number.isFinite(x));peak=Math.max(peak,Math.abs(x));}
 }
-assert(peak>.01,'WASM produces audible metronome clicks through the real mixer');
+console.log(`Guide peak ${peak.toFixed(4)} (browser keeps the codec's -6 dB output scaling)`);
+assert(peak>.22 && peak<.5,'raised guide click has useful output level without clipping');
+// A tap in a fully hidden bar is audible, but its generated sound is never
+// fed back as another key/MIDI answer. No guide pulse is due in this segment.
+ex=await boot();const taps=prefs();taps[5]=1<<4;taps[11]=crc(taps);assert.equal(restore(taps),1);
+ex.web_metro_action(0);runTo(2250);ex.web_midi_in(0x90,60,100);
+let tapPeak=0;
+for(let k=0;k<12;k++) {
+  ex.web_render(128);
+  for(const x of new Float32Array(ex.memory.buffer,ex.web_out_l(),128))tapPeak=Math.max(tapPeak,Math.abs(x));
+}
+ex.web_midi_in(0x80,60,0);console.log(`Player tap peak ${tapPeak.toFixed(4)}`);assert(tapPeak>.10 && tapPeak<.5);
+runTo(17000);assert.equal(ex.web_metro_metric(2),0);assert.equal(ex.web_metro_metric(5),1);
+assert.equal(ex.web_metro_metric(4),16,'player-click audio never creates hits');
 console.log('WASM metronome PASS: audible clicks, eight-bar MIDI scoring, exclusivity, user preset save, fresh-instance restore and corrupt records');
 // One firmware menu launches and returns from all three activities.
 ex=await boot();assert.equal(ex.web_training_open(),1);assert.equal(ex.web_training_menu(),1);

@@ -475,8 +475,9 @@ static void ui_leds(void)
     }
     if(metro_enabled) {c=fm1_in.notes;play=0;pdim=0;pbr=0;}
     if(training_menu_open) {c=0;play=0;pdim=0;pbr=0;}
+    uint32_t training_keys=ear_enabled || metro_enabled || training_menu_open;
     for (k = 0; k < 27u; k++) {
-        uint32_t lv = play ? play_key_led(TSEL, k) : KL_OFF;   /* playing: the layout, MIDI's notes too (LIGHTS) */
+        uint32_t lv = play ? play_key_led(TSEL, k) : training_keys?KL_DIM:KL_OFF;
         led_put(nl, 14u + k, (int)(((c >> k) & 1u) || lv == KL_ON));
         led_put(nd, 14u + k, lv == KL_DIM && lights != LIGHTS_OFF);
         led_put(nb, 14u + k, (int)((pdim >> k) & 1u));  /* the patterns holding something: selectable, so lit with

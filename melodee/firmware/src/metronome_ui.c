@@ -91,6 +91,21 @@ static uint32_t metro_sqrt(uint32_t x)
     }
     return r;
 }
+/* Main-only scanline disc. One bounded integer sqrt per visible row,
+ * fractional edge coverage, no supersampling or full-screen buffer. */
+static void metro_ui_circle(uint32_t band,uint32_t radius,uint16_t ink)
+{
+    for(int32_t y=0;y<48;y++) {
+        int32_t dy=(int32_t)band*48+y-132;
+        int32_t q=(int32_t)(radius*radius)-dy*dy;
+        if(q<0)continue;
+        uint32_t span=metro_sqrt((uint32_t)q<<8),fraction=span&15u;
+        int32_t half=(int32_t)(span>>4);
+        cv_rect(120-half,y,half*2+1,1,ink);
+        uint16_t edge=mix565(T_BG,ink,fraction*2u);
+        cv_pset(119-half,y,edge);cv_pset(121+half,y,edge);
+    }
+}
 static uint32_t metro_deviation(uint32_t hits,int32_t sum,uint32_t squares)
 {
     /* Multiply before dividing: truncating the mean first would turn tiny
@@ -100,18 +115,29 @@ static uint32_t metro_deviation(uint32_t hits,int32_t sum,uint32_t squares)
 }
 static void metro_ui_draw(void)
 {
-    static uint32_t version=~0u;
+    static uint32_t version=~0u,last_frame=~0u;
     uint32_t state,beat,bar,hits,misses,extra,targets,abs_ms,square_ms,v,window;
+    uint32_t now,feedback_at,feedback;
     int32_t bias,last;metro_settings_t s;
     fm1_irq_off();
     s=metro_settings;v=metro.version;state=metro.state;beat=metro.beat;bar=metro.bar;
     hits=metro.hits;misses=metro.misses;extra=metro.extra;targets=metro.targets;
     abs_ms=metro.abs_ms;square_ms=metro.square_ms;bias=metro.bias_ms;last=metro.last_ms;window=metro.window;
+    now=metro.now;feedback_at=metro.feedback_at;feedback=metro.feedback;
     fm1_irq_on();
-    if(!ui.force && version==v)return;version=v;ui.force=0;
+    uint32_t age=now-feedback_at,life=FS*2u/5u;
+    uint32_t frame=feedback!=METRO_FEEDBACK_NONE && age<life?age/(FS/30u)+1u:0u;
+    if(!ui.force && version==v && frame==last_frame)return;
+    version=v;last_frame=frame;ui.force=0;
+    uint32_t level=frame?(life-age)*256u/life:0u;
+    uint32_t radius=20u+72u*level/256u,alpha=12u*level*level/(256u*256u);
+    uint16_t glow=mix565(T_BG,feedback==METRO_FEEDBACK_GOOD?RGB(50,224,126):RGB(245,65,85),alpha);
+    uint8_t over=cv_over;
     const metro_meter_t *m=&metro_meters[s.meter];char label[48];
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,T_BG);
+        if(frame)metro_ui_circle(band,radius,glow);
+        cv_over=frame?1u:over;
         if(!band) {
             cv_text(8,0,TY_LB,s.mode==METRO_PRACTICE?"METRO":"RHYTHM",T_THEME);
             const char *status=state==METRO_STOPPED?"STOPPED":state==METRO_AUDIBLE?"LISTEN":
@@ -177,5 +203,6 @@ static void metro_ui_draw(void)
         }
         cv_blit(0,band*48u);
     }
+    cv_over=over;
     (void)bar;
 }

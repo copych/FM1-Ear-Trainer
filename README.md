@@ -25,7 +25,7 @@ Listen to the notes, then play the hidden ones on the keyboard—in any order, s
 
 Green means correct and moves to the next question. Red means a mistake and repeats the question. RATING starts at zero and rewards first-try answers; BEST remembers your highest rating for each mode.
 
-Settings and ratings are saved. Leave training and let saving finish before switching off. In the browser, choose **Start training**.
+Settings and ratings save after leaving the activity, with no periodic flash pauses during training. Leave training and let saving finish before switching off; changes since the last exit are lost if power is cut. Musical keys glow dimly during training (global LIGHTS controls the level), with brighter input feedback. In the browser, choose **Start training**.
 
 ## Metronome and rhythm games
 
@@ -49,6 +49,8 @@ One settings page offers 30–300 BPM and 22 meters/pulse grids, including odd g
 | HOME | Return to the training menu and save settings/presets |
 
 **Rhythm game:** starts immediately with the audible guide bar(s), with no extra precount. Eight bars alternate audible and hidden bars (1/1 or 2/2). Tap only the missing pulses in hidden bars: **Full bars** hides all pulses; **Odds** hides 1, 3, 5…; **Evens** hides 2, 4, 6…. Other pulses stay audible. Numbering starts again each bar. Evens needs at least two pulses, so selecting it in 1/4 switches to 2/4. BPM always counts quarter notes. Metronome plays the selected grid continuously without scoring.
+
+Guide clicks are louder and player taps make a distinct lower click. A soft-edged green/red circle shrinks and fades on matched taps/errors; it never marks hidden beats automatically.
 
 Results show a timing-weighted score, hits, misses, extra taps, mean absolute error, signed early/late bias and timing consistency (SD). The header shows LISTEN in audible bars and TAP SILENCE in hidden bars; pulse visuals appear only in audible bars. The browser aligns captured taps with the audio output clock automatically when supported; ALGORITHM adds a manual input correction (start at 0 ms). Use wired audio for consistent timing. See the [metronome guide](https://copych.github.io/feature-metronome-training-games/webapp/manual/#metronome) for details. Device settings save after leaving the screen; browser settings and user slots are remembered locally. Round results are session-only.
 

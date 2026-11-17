@@ -45,6 +45,19 @@ EXPORT(web_keys) void web_keys(uint32_t m)
     host_notes |= m & ~fm1_in.notes;
     fm1_in.notes = m;
 }
+/* Called on the same AudioWorklet thread as rendering. Submit key edges now
+ * so a short down/up between render quanta is not lost or double-counted by
+ * keyboard_block. Pitch training retains its original collected input path. */
+EXPORT(web_keys_at) void web_keys_at(uint32_t m,uint32_t at)
+{
+    if(metro_enabled) {
+        if(!training_menu_open && (m&~fm1_in.notes))metro_tap_at(at);
+        ear_keys=m;
+    }
+    web_keys(m);
+}
+EXPORT(web_metro_latency) void web_metro_latency(uint32_t samples)
+{metro.input_grace=samples>FS*2u?FS*2u:samples;}
 EXPORT(web_buttons) void web_buttons(uint32_t m)
 {
     host_pressed |= m & ~fm1_in.buttons;
@@ -64,6 +77,13 @@ EXPORT(web_master) void web_master(uint32_t v)        /* the MASTER knob, 0..102
 EXPORT(web_midi_in) void web_midi_in(uint32_t st, uint32_t d1, uint32_t d2)
 {
     midi_in_q[mi_w++ % MQ] = (st >> 4) | (st & 0xFFu) << 8 | (d1 & 0x7Fu) << 16 | (d2 & 0x7Fu) << 24;
+}
+EXPORT(web_midi_at) void web_midi_at(uint32_t st,uint32_t d1,uint32_t d2,uint32_t at)
+{
+    if(metro_enabled && st<0xF0u) {
+        (void)ear_midi_at(st&0xF0u,st&15u,d1,d2,1u,at);return;
+    }
+    web_midi_in(st,d1,d2);
 }
 
 /* the LEDs back by id (0..13 buttons, 14..40 keys), lit ones only (not the dim planes) */
@@ -96,15 +116,69 @@ EXPORT(web_now) uint32_t web_now(void) { return now_ms; }
 /* Simulator controls use the same game entry/command paths as the firmware,
  * without synthesizing HOME/PLAY gestures that could start the transport. */
 enum eWebEarAction { WEB_EAR_START, WEB_EAR_RETRY, WEB_EAR_NEXT, WEB_EAR_EXIT, WEB_EAR_ACTIONS_COUNT };
+EXPORT(web_training_open) uint32_t web_training_open(void) {return (uint32_t)training_ui_start();}
+EXPORT(web_training_menu) uint32_t web_training_menu(void) {return training_menu_open;}
+EXPORT(web_training_active) uint32_t web_training_active(void) {return training_session;}
 EXPORT(web_ear_action) uint32_t web_ear_action(uint32_t action)
 {
     if(action>=WEB_EAR_ACTIONS_COUNT) return 0;
+    if(training_menu_open)return 0;
     if(action==WEB_EAR_START) return (uint32_t)ear_ui_start();
     if(!ear_enabled) return 0;
     ear_ui_input(1u<<panel.btn[action==WEB_EAR_RETRY?B_PLAY:action==WEB_EAR_NEXT?B_REC:B_HOME]);
     return 1;
 }
 EXPORT(web_ear_active) uint32_t web_ear_active(void) { return ear_enabled; }
+enum eWebMetroAction { WEB_METRO_START, WEB_METRO_TOGGLE, WEB_METRO_TEMPO,
+    WEB_METRO_RETRY, WEB_METRO_EXIT, WEB_METRO_ACTIONS_COUNT };
+EXPORT(web_metro_action) uint32_t web_metro_action(uint32_t action)
+{
+    if(action>=WEB_METRO_ACTIONS_COUNT)return 0;
+    if(training_menu_open)return 0;
+    if(action==WEB_METRO_START)return (uint32_t)metro_ui_start();
+    if(!metro_enabled)return 0;
+    if(action==WEB_METRO_EXIT)metro_ui_exit();
+    else metro_publish(action==WEB_METRO_TOGGLE?METRO_CMD_TOGGLE:action==WEB_METRO_TEMPO?METRO_CMD_TAP:METRO_CMD_RESTART);
+    return 1;
+}
+EXPORT(web_metro_active) uint32_t web_metro_active(void) {return metro_enabled;}
+/* Readable results for browser accessibility as well as WASM regressions. */
+enum eWebMetroMetric { WEB_METRO_STATE, WEB_METRO_SCORE, WEB_METRO_HITS, WEB_METRO_TARGETS,
+    WEB_METRO_MISSES, WEB_METRO_EXTRAS, WEB_METRO_ERROR, WEB_METRO_BIAS, WEB_METRO_SD, WEB_METRO_METRICS_COUNT };
+EXPORT(web_metro_metric) int32_t web_metro_metric(uint32_t id)
+{
+    int32_t mean=metro.hits?metro.bias_ms/(int32_t)metro.hits:0;
+    switch(id) {
+    case WEB_METRO_STATE:return metro.state;
+    case WEB_METRO_SCORE:return (int32_t)metro_grade(metro.hits,metro.targets,metro.extra,metro.abs_ms,metro.window);
+    case WEB_METRO_HITS:return metro.hits;
+    case WEB_METRO_TARGETS:return metro.targets;
+    case WEB_METRO_MISSES:return metro.misses;
+    case WEB_METRO_EXTRAS:return metro.extra;
+    case WEB_METRO_ERROR:return metro.hits?(int32_t)(metro.abs_ms/metro.hits):0;
+    case WEB_METRO_BIAS:return mean;
+    case WEB_METRO_SD:return (int32_t)metro_deviation(metro.hits,metro.bias_ms,metro.square_ms);
+    default:return 0;
+    }
+}
+static uint8_t web_metro_prefs[METRO_PREFS_BYTES];
+EXPORT(web_metro_settings) uint8_t *web_metro_settings(void)
+{
+    metro_pack(web_metro_prefs,&metro_settings);
+    for(uint32_t k=0;k<METRO_USER_COUNT;k++)metro_pack(web_metro_prefs+(k+1u)*METRO_RECORD_BYTES,&metro_user[k]);
+    return web_metro_prefs;
+}
+EXPORT(web_metro_settings_restore) uint32_t web_metro_settings_restore(void)
+{
+    metro_settings_t next;
+    if(ear_enabled || metro_enabled || !metro_unpack(&next,web_metro_prefs))return 0;
+    metro_settings=next;
+    for(uint32_t k=0;k<METRO_USER_COUNT;k++) {
+        metro_settings_t empty={0};metro_user[k]=empty;
+        (void)metro_unpack(&metro_user[k],web_metro_prefs+(k+1u)*METRO_RECORD_BYTES);
+    }
+    return 1;
+}
 /* Same checked record as the device settings. The page owns browser storage;
  * no flash/localStorage operation runs inside the emulated firmware. */
 static uint8_t web_ear_prefs[EAR_SETTINGS_BYTES];

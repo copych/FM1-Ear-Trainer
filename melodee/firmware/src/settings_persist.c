@@ -51,6 +51,28 @@ static int16_t settings_glo[4];                     /* ext.glo: project.c GLO_KE
  * Builds without the game preserve these bytes unchanged. PER5 stays 604 B. */
 #define EAR_PREF_ROW 1u
 #define EAR_PREF_BYTE 8u
+/* Metronome: 12-byte checked records. Current settings in retired OBXF
+ * row 14 bytes 4..15; four user slots in retired SAMPLE/SLICE rows 4/13
+ * bytes 8..31. Preserve their first 64 legacy star bits and all neighbors.
+ * SLICE is disabled by core.h in this build. PER5 stays 604 bytes. */
+#ifdef MELODEE_EAR_TRAINER
+_Static_assert(!MELODEE_SLICE,"migrate metronome user slots before enabling SLICE");
+static void metro_preferences_import(const persist_t *p)
+{
+    metro_settings_t s=metro_default;
+    (void)metro_unpack(&s,p->favorites.factory[14]+4);metro_settings=s;
+    for(uint32_t k=0;k<METRO_USER_COUNT;k++) {
+        metro_settings_t empty={0};metro_user[k]=empty;
+        (void)metro_unpack(&metro_user[k],p->favorites.factory[k<2u?4:13]+8u+(k%2u)*METRO_RECORD_BYTES);
+    }
+}
+static void metro_preferences_export(persist_t *p)
+{
+    metro_pack(p->favorites.factory[14]+4,&metro_settings);
+    for(uint32_t k=0;k<METRO_USER_COUNT;k++)
+        metro_pack(p->favorites.factory[k<2u?4:13]+8u+(k%2u)*METRO_RECORD_BYTES,&metro_user[k]);
+}
+#endif
 /* Retired GRAIN row bytes 4..7 (past Felucca 1.0's stars in bits 0..11): 'U', 'V', version 1, USB VOLUME 0..100 %.
  * Untagged records take UA_VOLUME_DEFAULT. */
 #define USB_VOLUME_ROW 8u
@@ -143,7 +165,7 @@ static int settings_import(persist_t *p, int n)
     {
         ear_settings_t next={250,EAR_MAJOR,2,1,EAR_RANGE_OCTAVE,0};
         (void)ear_settings_unpack(&next,p->favorites.factory[EAR_PREF_ROW]+EAR_PREF_BYTE,EAR_SETTINGS_BYTES);
-        fm1_irq_off();ear_settings=next;fm1_irq_on();
+        fm1_irq_off();ear_settings=next;metro_preferences_import(p);fm1_irq_on();
     }
 #endif
     {
@@ -220,5 +242,6 @@ static void settings_export(persist_t *p)
     }
 #ifdef MELODEE_EAR_TRAINER
     ear_settings_pack(p->favorites.factory[EAR_PREF_ROW]+EAR_PREF_BYTE);
+    metro_preferences_export(p);
 #endif
 }

@@ -26,6 +26,12 @@ const root = path.resolve(__dirname, '../build/site');
   }
   const html=fs.readFileSync(path.join(root,'webapp/installer/index.html'),'utf8');
   const meta=JSON.parse(html.match(/^const meta = (\{.*\});$/m)[1]);
+  assert.equal(typeof manifest.sourceBranch,'string');assert(manifest.sourceBranch.length);
+  assert.match(manifest.sourceRevision,/^[a-f0-9]{40}$/);
+  assert(html.includes('Branch installer:'),'installer identifies its source branch');
+  const escapedBranch=manifest.sourceBranch.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#x27;');
+  assert(html.includes(escapedBranch),'installer branch matches build manifest');
+  assert(html.includes(manifest.sourceRevision),'installer revision matches build manifest');
   assert.equal(meta.product,manifest.product);
   assert.equal(meta.sha256.dual,manifest.files['firmware/ear-trainer-dev.fwsc']);
   assert.equal(new URL(meta.pkg.dual,new URL('webapp/installer/',base)).pathname,

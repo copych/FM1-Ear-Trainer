@@ -29,7 +29,9 @@ SIZE_FILES = ["ui.c", "gfx.c", "favorites.c", "icons.c", "ui_graph.c", "ui_draw.
               "main.c", "params.c", "browse.c", "screen.c", "panel.c", "cz_edit.h", "prophet_edit.h", "ota.c", "favorites.c",
               "cz_panel.h",
               # the song, punch, section sound and Bluetooth screens and the editor's radio command
-              "ui_song.c", "ui_song_punch.c", "ui_song_sound.c", "ui_ble.c", "editor_ble.c"]
+              "ui_song.c", "ui_song_punch.c", "ui_song_sound.c", "ui_ble.c", "editor_ble.c",
+              # Training screens are foreground UI, like the other ui_*.c files.
+              "ear_ui.c", "metronome_ui.c", "training_ui.c", "training_feedback_ui.c"]
 DEF = re.compile(
     r"^(?:static|void|int|uint\w*|int\w*|const)\b[^;=(]*?\b([A-Za-z_]\w*)\s*\(", re.M)
 # Stopped note transforms are infrequent main-loop work.
@@ -71,7 +73,9 @@ def size_names():
     # Playback, live capture and erase functions retain the normal optimization.
     names = {"recording_restore_note", "recording_copy", "recording_reindex",
              "drum909_init", "drum909_set", "drum_note_on", "voice_start",
-             "audio_batch_push", "mix_prepare_batch", "fm6_sync", "cz_native_block"}
+             "audio_batch_push", "mix_prepare_batch", "fm6_sync", "cz_native_block",
+             # Foreground codec and one-time hat setup; never render samples.
+             "metro_pack", "metro_unpack", "metro_crc", "metro_hat_prepare"}
     # Resident audio code that runs once per note, MIDI message, drum hit, recorded take, pattern switch or SysEx byte,
     # never per sample: its SRAM is the audio arena's (the MIDI-only tracks' banks took some)
     names |= {"d9_set_panel", "d9_rim_retune", "d9_smp_rate", "d9_bt_trigger", "drum909_trigger", "d9_biquad_set",

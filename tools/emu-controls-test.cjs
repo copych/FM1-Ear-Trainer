@@ -12,6 +12,7 @@ class Element {
   closest(){return null;}
   getContext(){return {createImageData:()=>({data:new Uint8ClampedArray(240*240*4)}),putImageData(){}};}
   fire(name,values={}){for(const callback of this.handlers[name]??[]) callback({preventDefault(){},target:this,...values});}
+  click(){this.fire('click');}
 }
 const ids=new Map(),events=new Element(),messages=[];
 const timers=new Map();let nextTimer=0;
@@ -83,9 +84,29 @@ vm.runInContext('storeEarSettings([])',context);
   assert.equal(vm.runInContext('readEarRatings()',context),null);
 console.log('Browser preferences PASS: real page save/reload, invalid JSON/length and unavailable storage');
 
+// Event times map to the speaker clock, not to the later message delivery.
+context.performance={now:()=>1100};
+vm.runInContext('node.context={currentTime:10,baseLatency:.01,outputLatency:.1,getOutputTimestamp:()=>({contextTime:9.8,performanceTime:1000})}',context);
+assert.equal(vm.runInContext('audioClock(1000).audioTime',context),9.8);
+events.fire('keydown',{code:'KeyZ',timeStamp:1000});
+assert.equal(messages.filter(m=>m.type==='keys').at(-1).audioTime,9.8);
+assert(messages.some(m=>m.type==='audio-clock'));
+events.fire('keyup',{code:'KeyZ',timeStamp:1000});
+vm.runInContext('delete node.context.getOutputTimestamp',context);
+assert(Math.abs(vm.runInContext('audioClock(1000).audioTime',context)-9.79)<1e-9);
+console.log('Browser input clock PASS: captured key time, speaker timestamp and latency fallback');
+// Turning a knob leaves focus on its slider. Note letters must still reach
+// the game; arrows remain owned by the knob's own key handler.
+events.fire('keydown',{code:'KeyZ',timeStamp:1000,target:{closest:selector=>selector.includes('[role=slider]')}});
+assert.equal(messages.filter(m=>m.type==='keys').at(-1).mask,1,'note input works after selecting an activity or turning a knob');
+events.fire('keyup',{code:'KeyZ',timeStamp:1000,target:{closest:()=>true}});
+assert.equal(messages.filter(m=>m.type==='keys').at(-1).mask,0,'key release follows the press across focus changes');
+events.fire('keydown',{code:'KeyZ',timeStamp:1000,target:{closest:()=>true}});
+assert.equal(messages.filter(m=>m.type==='keys').at(-1).mask,0,'typing in a real form control is not a game tap');
+
 async function testGameStart() {
   const beforeDevice=html.slice(html.indexOf('<main>'),html.indexOf('<div class="device"'));
-  assert.equal((beforeDevice.match(/<button\b/g)||[]).length,1,'only one button above the emulator');
+  assert.equal((beforeDevice.match(/<button\b/g)||[]).length,1,'one shared Ear Trainer entry');
   assert(beforeDevice.includes('Start training'));
   context.fetch=async()=>({arrayBuffer:async()=>new ArrayBuffer(8)});
   context.AudioContext=class {constructor(){this.audioWorklet={addModule:async()=>{}};this.destination={};}async resume(){}};
@@ -94,14 +115,23 @@ async function testGameStart() {
   await ids.get('power').handlers.click[0]({});
   assert.equal(messages.at(-1).type,'load','one click initializes audio and loads firmware');
   vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:false,keys:0,buttons:0}})',context);
-  assert.equal(messages.at(-1).type,'ear');assert.equal(messages.at(-1).action,0,'first ready frame automatically starts training');
+  assert.equal(messages.at(-1).type,'training','first ready frame opens the training menu');
   assert.equal(ids.get('power').disabled,true);
-  vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:true,keys:0,buttons:0}})',context);
+  vm.runInContext('node.port.onmessage({data:{type:"frame",trainingActive:true,trainingMenu:true,earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').textContent,'Choose an activity');
+  vm.runInContext('node.port.onmessage({data:{type:"frame",trainingActive:true,earActive:true,keys:0,buttons:0}})',context);
   assert.equal(ids.get('power').textContent,'Training running');
   vm.runInContext('node.port.onmessage({data:{type:"frame",earActive:false,keys:0,buttons:0}})',context);
   assert.equal(ids.get('power').disabled,false,'HOME exit permits re-entry');
   await ids.get('power').handlers.click[0]({});
-  assert.equal(messages.at(-1).type,'ear');assert.equal(messages.at(-1).action,0);
-  console.log('Game start PASS: one top button, audio boot, automatic entry and re-entry after HOME');
+  assert.equal(messages.at(-1).type,'training');
+  vm.runInContext('node.port.onmessage({data:{type:"frame",metroActive:true,earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').disabled,true);
+  vm.runInContext('node.port.onmessage({data:{type:"frame",metroActive:true,metroStats:[3,0,0,16,16,8,0,0,0],keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').textContent,'Round finished');
+  assert.match(ids.get('status').textContent,/Timing unavailable: no matched taps/);
+  vm.runInContext('node.port.onmessage({data:{type:"frame",metroActive:false,earActive:false,keys:0,buttons:0}})',context);
+  assert.equal(ids.get('power').disabled,false);
+  console.log('Activity start PASS: one shared entry, audio boot, training menu state, mutual exclusion and re-entry after HOME');
 }
 testGameStart().catch(error=>{console.error(error);process.exitCode=1;});

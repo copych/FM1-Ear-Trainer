@@ -34,6 +34,7 @@ static void ear_ui_load_preset(uint32_t cmd)
 }
 static int ear_ui_start(void)
 {
+    if(metro_enabled)return 0;
     if(ear_enabled) { ear_publish(EAR_CMD_RETRY); return 1; }
     if(song.playing || transport_busy() || boot_work.state) return 0;
     ear_saved_sel=song.sel;
@@ -110,25 +111,32 @@ static int ear_ui_input(uint32_t pressed)
  * Five 48-row tiles retain the existing bounded canvas instead of a framebuffer. */
 static void ear_ui_draw(void)
 {
-    uint32_t state,attempts,armed,score,best,count,guess,entered,index,scale,gap,sounding,range,matched;
+    uint32_t state,attempts,armed,score,best,count,guess,entered,index,scale,gap,sounding,range,matched,serial;
     int32_t award;
     uint8_t notes[4];
-    static uint32_t last_state=EAR_STATES_COUNT,last_attempts,last_armed,last_entered,last_index;
+    static uint32_t last_state=EAR_STATES_COUNT,last_attempts,last_armed,last_entered,last_index,last_serial,feedback_at,last_frame;
     fm1_irq_off();
     state=ear.state;attempts=ear.attempts;armed=ear.armed;score=ear.score;best=ear_ratings[ear.mode][1];award=ear.last_award;matched=ear.matched;
     count=ear.count;guess=ear.guess;entered=ear.entered;index=ear.index;scale=ear.scale;gap=ear.gap;
-    sounding=ear.sounding;range=ear.range;
+    sounding=ear.sounding;range=ear.range;serial=ear.serial;
     for(uint32_t k=0;k<4u;k++)notes[k]=ear.notes[k];
     fm1_irq_on();
+    uint32_t feedback=state==EAR_CORRECT || state==EAR_WRONG;
+    if(feedback && (state!=last_state || attempts!=last_attempts || serial!=last_serial))feedback_at=fm1_ms;
+    uint32_t age=fm1_ms-feedback_at,frame=feedback && age<400u?age*30u/1000u+1u:0u;
     if(!ui.force && state==last_state && attempts==last_attempts && armed==last_armed &&
-        entered==last_entered && index==last_index)return;
-    last_state=state;last_attempts=attempts;last_armed=armed;last_entered=entered;last_index=index;ui.force=0;
-    uint16_t bg=state==EAR_CORRECT?RGB(16,104,55):state==EAR_WRONG?RGB(148,32,42):T_BG;
-    uint16_t ink=(state==EAR_CORRECT || state==EAR_WRONG)?RGB(255,255,255):T_TEXT;
-    uint16_t dim=(state==EAR_CORRECT || state==EAR_WRONG)?RGB(230,238,230):T_DIM;
+        entered==last_entered && index==last_index && serial==last_serial && frame==last_frame)return;
+    last_state=state;last_attempts=attempts;last_armed=armed;last_entered=entered;last_index=index;
+    last_serial=serial;last_frame=frame;ui.force=0;
+    uint32_t level=frame?(400u-age)*256u/400u:0u,radius=20u+72u*level/256u;
+    uint16_t bg=T_BG,ink=T_TEXT,dim=T_DIM;
+    uint16_t glow=mix565(bg,state==EAR_CORRECT?RGB(50,224,126):RGB(245,65,85),12u*level*level/(256u*256u));
+    uint8_t over=cv_over;
     char label[40];
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,bg);
+        if(frame)training_feedback_circle(band,radius,glow);
+        cv_over=frame?1u:over;
         if(band==0) {
             if(ear_saving) {
                 cv_text_c(120,4,TY_TX,"SAVING SETTINGS",ink,bg);
@@ -207,4 +215,5 @@ static void ear_ui_draw(void)
         }
         cv_blit(0,band*48u);
     }
+    cv_over=over;
 }

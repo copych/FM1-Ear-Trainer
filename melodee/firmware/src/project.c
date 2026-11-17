@@ -1657,30 +1657,13 @@ static void settings_poll_inner(void)
 
 static void settings_poll(void)
 {
+    /* Flash writes halt sound and input scanning on FM-1. A quiet answer
+     * pause is still live training: the minute checkpoint used to interrupt
+     * its screen/keys. Queue all training saves until audio consumes EXIT. */
+    if(metro_enabled || ear_enabled)return;
 #if MELODEE_FLASH && defined(MELODEE_EAR_TRAINER)
-    /* Main-only checkpoint, at most once per minute while practicing. Exit
-     * drains it on the next idle poll. Existing A/B and quiet guards apply. */
-    if(ear_ratings_dirty && (!ear_enabled || (uint32_t)(fm1_ms-ear_ratings_saved_ms)>=60000u) && !persist_pending)
+    if(ear_ratings_dirty && !persist_pending)
         persist_pending=1;
-    if(ear_enabled) {
-        /* Establish an idle window atomically: a note cannot start between
-         * the active-voice check and storage's own IRQ-off flash operation. */
-        fm1_irq_off();
-        uint32_t safe=persist_pending && flash_ok && !transport_busy() &&
-            (persist_pending!=2u || (uint32_t)(fm1_ms-persist_retry_ms)>=1000u) &&
-            !ear_request && !ear_loading &&
-            ear.state==EAR_ANSWER && !ear_held() && ear.player<0 &&
-            (uint32_t)(fm1_ms-ear_settings_ms)>=1000u;
-        for(uint32_t k=0;k<NPART;k++)for(uint32_t i=0;i<NVOICE;i++)
-            if(trk[k].v[i].active) safe=0;
-        if(safe) ear_saving=1;
-        fm1_irq_on();
-        if(!safe) return;
-        ui.force=1;ear_ui_draw();lcd_sync();
-        settings_poll_inner();
-        fm1_irq_off();ear_saving=0;fm1_irq_on();ui.force=1;
-        return;
-    }
 #endif
     settings_poll_inner();
 }

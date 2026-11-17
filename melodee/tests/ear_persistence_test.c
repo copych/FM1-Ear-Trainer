@@ -8,16 +8,8 @@ static void check_erase_guard(void);
 static uint32_t guarded_erases;
 static void check_erase_guard(void)
 {
-    if(ear_enabled) {
-        assert(ear_saving && ear.state==EAR_ANSWER && !ear_held() && !ear_request);
-        assert(!ear.sounding && ear.player<0);
-        for(uint32_t k=0;k<NPART;k++)for(uint32_t v=0;v<NVOICE;v++) assert(!trk[k].v[v].active);
-        ear.armed=1;
-        uint32_t age=vage, attempts=ear.attempts;
-        ear_player_press(60);
-        assert(vage==age && ear.attempts==attempts && ear.player<0);
-        guarded_erases++;
-    }
+    assert(!ear_enabled && !metro_enabled);
+    guarded_erases++;
 }
 static void defaults(void)
 {
@@ -71,7 +63,8 @@ int main(void)
     ear.state=EAR_ANSWER;trk[0].v[0].active=1;settings_poll();assert(erases==before);
     for(uint32_t k=0;k<NPART;k++)for(uint32_t v=0;v<NVOICE;v++)trk[k].v[v].active=0;
     ear_keys=1;settings_poll();assert(erases==before);ear_keys=0;
-    settings_poll();assert(erases==before+1 && !persist_pending && !ear_saving && guarded_erases);
+    fm1_ms+=300000;settings_poll();assert(erases==before && persist_pending);
+    ear_enabled=0;settings_poll();assert(erases==before+1 && !persist_pending && !ear_saving && guarded_erases);
     reboot();assert(ear_settings.scale==EAR_MINOR && ear_settings.range==EAR_RANGE_FULL &&
         ear_settings.count==4 && ear_settings.guess==3 && ear_settings.gap==725 && ear_settings.preset==17);
     before=erases;settings_save();assert(erases==before && !persist_pending);
@@ -101,14 +94,15 @@ int main(void)
     }
     scores[6]=255;scores[7]=255;scores[167]=ear_rating_crc(scores);
     assert(!ear_ratings_unpack(scores,sizeof scores));
-    /* Batched checkpoint waits a minute and all normal quiet/held-key gates. */
+    /* No minute checkpoint or quiet-pause flash while training is open. */
     ear_enabled=1;ear.state=EAR_ANSWER;ear.player=-1;ear_request=0;ear_keys=0;
     memset(ear_down,0,sizeof ear_down);
     for(uint32_t k=0;k<NPART;k++)for(uint32_t v=0;v<NVOICE;v++)trk[k].v[v].active=0;
     ear_ratings[2][0]=20;ear_ratings_dirty=1;before=erases;
     settings_poll();assert(erases==before);
-    fm1_ms+=60000;ear_keys=1;settings_poll();assert(erases==before && persist_pending);
-    ear_keys=0;settings_poll();assert(erases==before+1 && !ear_ratings_dirty);
+    fm1_ms+=60000;ear_keys=1;settings_poll();assert(erases==before && ear_ratings_dirty);
+    ear_keys=0;fm1_ms+=300000;settings_poll();assert(erases==before && ear_ratings_dirty);
+    ear_enabled=0;settings_poll();assert(erases==before+1 && !ear_ratings_dirty);
     reboot();assert(ear_ratings[2][0]==20 && ear_ratings[2][1]==44);
     ear_ratings[2][0]=10;ear_ratings_dirty=1;fail_after=0;settings_poll();assert(persist_pending==2);
     reboot();assert(ear_ratings[2][0]==20);fail_after=-1;
@@ -122,6 +116,6 @@ int main(void)
     uint32_t at=sizeof(persist_t)+sizeof(tmpl_t);
     blob[at+6]^=1;assert(!st_save(OBJ_SETTINGS,blob,(uint32_t)n));
     reboot();assert(!ear_ratings[39][1] && template_used() && st_crc32(&tmpl,sizeof tmpl)==template_crc);
-    puts("Ear settings/ratings PASS: round-trip, legacy/corrupt/truncated validation, quiet checkpoint, reboot and interrupted A/B save");
+    puts("Ear settings/ratings PASS: round-trip, legacy/corrupt/truncated validation, no flash during training, exit save, reboot and interrupted A/B save");
     return 0;
 }

@@ -23,7 +23,7 @@ Listen to the notes, then play the hidden ones on the keyboard—in any order, s
 | REC | Skip to the next question |
 | HOME | Return to the training menu; HOME again exits |
 
-Green means correct and moves to the next question. Red means a mistake and repeats the question. RATING starts at zero and rewards first-try answers; BEST remembers your highest rating for each mode.
+A green circle shrinks and fades for a correct answer; a red circle does the same for a mistake before replay. Pitch and rhythm training share this background effect. RATING starts at zero and rewards first-try answers; BEST remembers your highest rating for each mode.
 
 Settings and ratings save after leaving the activity, with no periodic flash pauses during training. Leave training and let saving finish before switching off; changes since the last exit are lost if power is cut. Musical keys glow dimly during training (global LIGHTS controls the level), with brighter input feedback. In the browser, choose **Start training**.
 

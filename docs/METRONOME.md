@@ -3,6 +3,37 @@
 The player controls are in the root README and `web/guide/index.html#metronome`.
 This is a development patch, not a hardware-qualified release.
 
+## Shared pitch/rhythm circle background — 2026-11-17
+
+Pitch correct/wrong screens now use the same soft-edged circle geometry,
+colors and 400 ms shrinking/fading curve as the metronome. The former full-screen
+green/red fill is replaced by the theme background. Result text and note-card
+highlights remain after the circle fades. Main snapshots state as before and
+tracks the result's serial/attempt so an ordinary redraw does not restart the
+animation. Only animation frame changes cause additional redraws; static held
+results return to the existing idle draw guard. No new pitch cue or partial-answer
+feedback is added.
+
+The bounded row rasterizer and integer square root move unchanged into
+`training_feedback_ui.c`, included before both screens, and remain in the
+main-only size-optimization list. Text blends over the circle and restores the
+renderer mode on exit. No audio, scoring, state-transition, input, persistence
+or wire-format code changes. Baseline: 4f36a47; `game-test` passed before editing.
+
+| Compliance category | Status / evidence |
+| --- | --- |
+| Target / build / ABI | PASS: existing classic FM-1, Clang pi32v2 4.0.1 r3, pinned SDK d179b4484759423312073f5fbb232501aa491047 and build flags retained. `target` passes package/image/manifest/SRAM/stack checks. App 576,764 B; package 668,948 B. Physical bootloader identity UNKNOWN. |
+| Audio hot path / numerics | PASS for source scope: no audio path changes; circle/envelope uses bounded integer main-loop math. Shared helper remains outside ISR/render calls. Pitch host PCM remains 22.88 s, peak 19,309, RMS 5,582.0, matching the pre-change baseline. |
+| Execution ownership / synchronization | PASS: existing IRQ-masked snapshot and main-owned UI state retained; no locks, workers, queues or waits added. |
+| Memory / storage / I/O | PASS for build/bounds: data+BSS 97,592/98,304 B; pool 137,460/357,888 B; arena 74,720 B (minimum 49,152); ISR stack audit 2,984 B. Shared strip drawing, no new framebuffer, storage or peripheral work. Physical drawing latency UNVERIFIED. |
+| Dependencies / includes / licenses | PASS: no external dependency; shared in-repo helper has original Kerem Kilic/SPDX attribution. README screenshot regenerated from the real host framebuffer. |
+| Compatibility / package / recovery | PASS for source/build scope: unchanged settings/version/metric IDs, loader/layout and package contracts; existing recovery checks retained. Physical installation/rollback UNVERIFIED. |
+| Host functional validation | PASS: native `game-test` checks correct/wrong pulses, 200 ms shrink, 401 ms clear, unchanged corner background, renderer-mode restoration and no static-result redraw. Full pitch behavior/audio assertions, `metro-test`, `training-test`, `web`, `web-test`, page controls, `site` and served-site checks pass. Browser assertions now check circle colors/clearance, locked note-card glyphs and ratings through animation, and final-answer-only feedback for four hidden notes. Correct/fading/wrong/cleared framebuffers visually reviewed at native resolution. |
+| Hardware real-time validation | UNVERIFIED: no physical redraw/soak or recovery run. Check both result colors/decay, held answers, all palettes, rapid answers/replay, keys and audio during animation under USB/TRS load; measure ISR margin and main-loop/LCD latency, then run a sustained soak. Nominal audio remains 44.1 kHz / CTL 32 / 128-frame I2S halves (~2.90 ms). |
+
+Local package SHA-256: `3b2139fd5afd94d7ccf5e3b1685ddc64a14a73470599f5bcf258ad2accbb462e`.
+No separate sanitizer or hardware performance measurement is claimed.
+
 ## Plain-metronome sound presets — 2026-11-17
 
 In plain Metronome, K3 now selects Click (the existing sound), 808, CR78 or FM.

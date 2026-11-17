@@ -22,6 +22,16 @@ function run(ms) {
   return peak;
 }
 function screen() { return Buffer.from(new Uint8Array(ex.memory.buffer, ex.web_fb(), 240*240*2)); }
+function pixel(x,y) {const s=screen(),at=2*(y*240+x);return (s[at]<<8)|s[at+1];}
+function targetCard() {
+  // Compare solid glyph coverage: background blending rounds edge alpha
+  // differently once the circle clears, without changing the note card.
+  const s=screen(),mask=Buffer.alloc(24*96);
+  for(let y=0;y<24;y++)for(let x=0;x<96;x++) {
+    const at=2*((62+y)*240+130+x);mask[y*96+x]=((s[at]<<8)|s[at+1])===0xffff?1:0;
+  }
+  return mask;
+}
 run(200);
 assert.equal(ex.web_ear_action(Action.RETRY),0);
 assert.equal(ex.web_ear_action(Action.NEXT),0);
@@ -63,18 +73,25 @@ ex.web_keys(1);run(40); // F3 is neither reference nor target.
 const wrong=screen();
 assert(!waiting.equals(wrong), 'wrong answer must update feedback');
 function bg() { const s=screen();return (s[0]<<8)|s[1]; }
-assert.equal(bg(),0x9105,'wrong feedback fills the background red');
+assert.equal(bg(),waitingBg,'wrong feedback leaves the corner background unchanged');
+const red=pixel(50,94);assert((red>>11)>((red>>6)&31),'wrong feedback is a red circle');
+const wrongCard=targetCard();
+const wrongRatings=Array.from(new Uint8Array(ex.memory.buffer,ex.web_ear_ratings(),168));
 ex.web_keys(0); run(20);
 for(let note=53;note<=79;note++) {
   ex.web_keys(1<<(note-53));run(5);ex.web_keys(0);run(5);
-  assert(screen().equals(wrong),'wrong attempt must remain locked while playing the scale');
+  assert(targetCard().equals(wrongCard),'wrong note card remains locked while its background animates');
 }
 ex.web_midi_in(0x90,72,100);run(50);ex.web_midi_in(0x80,72,0);run(20);
-assert(screen().equals(wrong),'MIDI cannot change a locked failure');
-run(2900);assert.notEqual(bg(),0x9105,'wrong answer automatically replays the same question');
+assert(targetCard().equals(wrongCard),'MIDI cannot change a locked failure');
+assert.deepEqual(Array.from(new Uint8Array(ex.memory.buffer,ex.web_ear_ratings(),168)),wrongRatings,'locked input cannot change the rating');
+run(150);assert.equal(pixel(50,94),waitingBg,'wrong circle clears after 400 ms');
+run(2750);
 ex.web_keys(1<<(heard[1]-53));run(40);
-assert.equal(bg(),0x1346,'correct feedback fills the background green');
-run(1100);assert.notEqual(bg(),0x1346,'success automatically starts the next exercise');
+assert.equal(bg(),waitingBg,'correct feedback leaves the corner background unchanged');
+const green=pixel(50,94);assert(((green>>6)&31)>(green>>11),'correct feedback is a green circle');
+run(410);assert.equal(pixel(50,94),waitingBg,'correct circle clears after 400 ms');
+run(690);
 ex.web_keys(0);run(1800);
 ex.web_ear_action(Action.NEXT);run(1800);
 ex.web_ear_action(Action.EXIT);run(1500);
@@ -123,7 +140,8 @@ assert(bassPeak>.01,'selected preset must produce audio');
 assert.equal(ex.web_led_keys()>>>0,0,'changing preset must not reveal hidden notes');
 for(let k=0;k<4;k++) {
   ex.web_midi_in(0x90,pitches[3-k],100);run(20);
-  assert.equal(bg()===0x1346,k===3,'award only after all four hidden notes, reverse order with keys held');
+  const feedback=pixel(50,94);
+  assert.equal(((feedback>>6)&31)>(feedback>>11),k===3,'green circle only after all four hidden notes, reverse order with keys held');
 }
 for(const note of pitches)ex.web_midi_in(0x80,note,0);
 run(20);

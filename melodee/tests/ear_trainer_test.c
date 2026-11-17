@@ -58,7 +58,13 @@ int main(void)
     /* A genuinely wrong built-in key, then replay and correct target. */
     fm1_in.notes=1u;audio_ms(10);
     assert(ear.state==EAR_WRONG && ear.attempts==1 && ear.player==53);
-    save_screen("ear-wrong",RGB(148,32,42));
+    save_screen("ear-wrong",T_BG);
+    uint16_t plain=(uint16_t)((T_BG>>8)|(T_BG<<8));
+    assert(host_screen[94u*240u+50u]!=plain && !cv_over);
+    fm1_ms+=200;save_screen("ear-wrong-fade",T_BG);
+    assert(host_screen[94u*240u+50u]==plain); /* disc shrank; corner never flashed */
+    fm1_ms+=201;save_screen("ear-wrong-faded",T_BG);
+    uint64_t sent=host_sent;fm1_ms+=100;ear_ui_draw();assert(host_sent==sent);
     fm1_in.notes=0; audio_ms(10);
     assert(ear.player==-1);
     uint32_t locked_age=vage;
@@ -83,7 +89,12 @@ int main(void)
     fm1_in.notes=1u<<(target-53u);audio_ms(10);
     assert(ear.state==EAR_CORRECT && ear.attempts==2);
     assert(ear.last_award==0 && ear.score==0u && !ear.streak);
-    save_screen("ear-correct",RGB(16,104,55));
+    save_screen("ear-correct",T_BG);
+    assert(host_screen[94u*240u+50u]!=plain && !cv_over);
+    fm1_ms+=200;save_screen("ear-correct-fade",T_BG);
+    assert(host_screen[94u*240u+50u]==plain);
+    fm1_ms+=201;save_screen("ear-correct-faded",T_BG);
+    sent=host_sent;ear_ui_draw();assert(host_sent==sent);
     audio_ms(800);assert(ear.state==EAR_CORRECT && ear.serial==serial);
     audio_ms(300);assert(ear.serial==serial+1u && !ear.armed && ear.player==-1);
     audio_ms(1800);assert(ear.state==EAR_ANSWER && !ear.armed && !ear.attempts);

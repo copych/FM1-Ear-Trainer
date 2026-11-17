@@ -31,7 +31,7 @@ SIZE_FILES = ["ui.c", "gfx.c", "favorites.c", "icons.c", "ui_graph.c", "ui_draw.
               # the song, punch, section sound and Bluetooth screens and the editor's radio command
               "ui_song.c", "ui_song_punch.c", "ui_song_sound.c", "ui_ble.c", "editor_ble.c",
               # Training screens are foreground UI, like the other ui_*.c files.
-              "ear_ui.c", "metronome_ui.c", "training_ui.c"]
+              "ear_ui.c", "metronome_ui.c", "training_ui.c", "training_feedback_ui.c"]
 DEF = re.compile(
     r"^(?:static|void|int|uint\w*|int\w*|const)\b[^;=(]*?\b([A-Za-z_]\w*)\s*\(", re.M)
 # Stopped note transforms are infrequent main-loop work.

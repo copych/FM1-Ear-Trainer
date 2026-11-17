@@ -88,30 +88,6 @@ static int metro_ui_input(uint32_t pressed)
     } else if(pressed&(1u<<panel.btn[B_OCTDN]))metro_publish(METRO_CMD_RESTART);
     return 1;
 }
-/* Exact integer sqrt for display-only standard deviation, bounded 16 steps. */
-static uint32_t metro_sqrt(uint32_t x)
-{
-    uint32_t r=0,bit=1u<<30;
-    for(uint32_t i=0;i<16u;i++,bit>>=2) {
-        if(x>=r+bit) {x-=r+bit;r=(r>>1)+bit;}else r>>=1;
-    }
-    return r;
-}
-/* Main-only scanline disc. One bounded integer sqrt per visible row,
- * fractional edge coverage, no supersampling or full-screen buffer. */
-static void metro_ui_circle(uint32_t band,uint32_t radius,uint16_t ink)
-{
-    for(int32_t y=0;y<48;y++) {
-        int32_t dy=(int32_t)band*48+y-132;
-        int32_t q=(int32_t)(radius*radius)-dy*dy;
-        if(q<0)continue;
-        uint32_t span=metro_sqrt((uint32_t)q<<8),fraction=span&15u;
-        int32_t half=(int32_t)(span>>4);
-        cv_rect(120-half,y,half*2+1,1,ink);
-        uint16_t edge=mix565(T_BG,ink,fraction*2u);
-        cv_pset(119-half,y,edge);cv_pset(121+half,y,edge);
-    }
-}
 static uint32_t metro_deviation(uint32_t hits,int32_t sum,uint32_t squares)
 {
     /* Multiply before dividing: truncating the mean first would turn tiny
@@ -142,7 +118,7 @@ static void metro_ui_draw(void)
     const metro_meter_t *m=&metro_meters[s.meter];char label[48];
     for(uint32_t band=0;band<5u;band++) {
         cv_begin(240,48,T_BG);
-        if(frame)metro_ui_circle(band,radius,glow);
+        if(frame)training_feedback_circle(band,radius,glow);
         cv_over=frame?1u:over;
         if(!band) {
             cv_text(8,0,TY_LB,s.mode==METRO_PRACTICE?"METRO":"RHYTHM",T_THEME);

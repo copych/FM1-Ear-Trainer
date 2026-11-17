@@ -38,6 +38,7 @@ with zipfile.ZipFile(recovery, "w", zipfile.ZIP_DEFLATED) as archive:
                       "Recovery source is included; no device-specific backup is supplied.\n")
 for name in ("ear-trainer-dev.fwsc", "ear-trainer-dev-res.bin", recovery.name):
     shutil.copyfile(site / "firmware" / name, public / name)
+shutil.copyfile(root / "melodee/build/melodee.bin", public / "ear-trainer-app.bin")
 with tarfile.open(public / "ear-trainer-site.tar.gz", "w:gz") as archive:
     archive.add(site, arcname=".")
 checksums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n"

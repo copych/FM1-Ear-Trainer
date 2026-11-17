@@ -1,7 +1,7 @@
 name: Build, attest and publish Pages
 on:
   push:
-    branches: [main, feature-metronome-training-games]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read

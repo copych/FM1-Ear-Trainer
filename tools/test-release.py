@@ -75,7 +75,7 @@ class ReleaseValidation(unittest.TestCase):
                 entry=tarfile.TarInfo("./"+name);entry.size=len(data);tar.addfile(entry,io.BytesIO(data))
         self.sums()
     def sums(self):
-        (self.public / "SHA256SUMS").write_text("".join(f"{A.digest((self.public/n).read_bytes())}  {n}\n" for n in A.PUBLIC))
+        (self.public / A.SUM_NAME).write_text("".join(f"{A.digest((self.public/n).read_bytes())}  {n}\n" for n in A.PUBLIC))
     def prepare(self):
         A.prepare(self.public,self.native,self.output,VERSION,COMMIT,"refs/tags/v"+VERSION)
     def test_complete(self):

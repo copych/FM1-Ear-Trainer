@@ -1,0 +1,102 @@
+name: Finalize an attested draft release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag
+        required: true
+        type: string
+      run_id:
+        description: Release run whose build/tests/attestation and recovery jobs passed
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: finalize-release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+      attestations: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_RUN: ${{ inputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Require exact source and successful build/test/attestation/recovery steps
+        run: |
+          set -euo pipefail
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN" > build-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN/jobs?per_page=100" > build-jobs.json
+          python3 - <<'PY'
+          import json,os,subprocess
+          run=json.load(open('build-run.json')); jobs=json.load(open('build-jobs.json'))['jobs']
+          commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert run['head_sha']==commit and run['head_branch']==os.environ['RELEASE_TAG']
+          assert run['event']=='push' and run['path'].split('@')[0]=='.github/workflows/release.yml'
+          firmware=[j for j in jobs if j['name']=='firmware / build']; assert len(firmware)==1
+          for prefix in ('Build (the repository', 'Tests (the repository', 'Run actions/attest-build-provenance@','Run actions/upload-artifact@'):
+              steps=[s for s in firmware[0]['steps'] if s['name'].startswith(prefix)]
+              assert len(steps)==1 and steps[0]['conclusion']=='success',prefix
+          recovery=[j for j in jobs if j['name'].startswith('recovery (')]
+          assert len(recovery)==4 and all(j['conclusion']=='success' for j in recovery)
+          print('Exact source commit, build, blocking tests, attestation and all four recovery jobs verified')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: build/attested
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: recovery-*
+          path: build/native-recovery
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify all attested files and exact tag/source digest
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse HEAD)
+          cd build/attested
+          sha256sum -c SHA256SUMS
+          cd build/public
+          # The original tagged validator expects its original manifest name.
+          if test -f PUBLIC_SHA256SUMS; then sha256sum -c PUBLIC_SHA256SUMS; else sha256sum -c SHA256SUMS; fi
+          for file in *.fwsc *.bin *.zip *.tar.gz; do
+            gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow zvenson/fm1-build/.github/workflows/build.yml \
+              --source-ref "refs/tags/$RELEASE_TAG" --source-digest "$commit"
+          done
+      - name: Validate full release with the tagged source validator
+        run: |
+          GITHUB_REF="refs/tags/$RELEASE_TAG" python3 tools/prepare-release.py build/attested/build/public build/native-recovery build/release
+          python3 - <<'PY'
+          import json,os,hashlib
+          from pathlib import Path
+          out=Path('build/release'); p=out/'BUILD_INFO.json'; info=json.loads(p.read_text())
+          info['publicationWorkflowRun']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          p.write_text(json.dumps(info,indent=2)+'\n')
+          (out/'SHA256SUMS').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(out.iterdir()) if p.name!='SHA256SUMS'))
+          PY
+      - name: Publish complete verified draft
+        run: |
+          set -euo pipefail
+          version=${RELEASE_TAG#v}
+          gh release upload "$RELEASE_TAG" build/release/* --clobber
+          for file in ear-trainer-dev.fwsc ear-trainer-dev-res.bin ear-trainer-app.bin ear-trainer-recovery-sources.zip ear-trainer-site.tar.gz PUBLIC_SHA256SUMS; do
+            if gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -Fxq "$file"; then
+              gh release delete-asset "$RELEASE_TAG" "$file" --yes
+            fi
+          done
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest \
+            --title "FM-1 Ear Trainer $version" --notes-file "docs/RELEASE_$version.md"

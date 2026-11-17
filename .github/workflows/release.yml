@@ -108,7 +108,7 @@ jobs:
           cd build/attested
           sha256sum -c SHA256SUMS
           cd build/public
-          sha256sum -c SHA256SUMS
+          sha256sum -c PUBLIC_SHA256SUMS
           for file in *.fwsc *.bin *.zip *.tar.gz; do
             gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" \
               --signer-workflow zvenson/fm1-build/.github/workflows/build.yml \
@@ -125,7 +125,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" build/release/* --clobber
           # The shared builder attaches its attested development filenames to
           # the draft. Replace those with the validated versioned filenames.
-          for file in ear-trainer-dev.fwsc ear-trainer-dev-res.bin ear-trainer-app.bin ear-trainer-recovery-sources.zip ear-trainer-site.tar.gz; do
+          for file in ear-trainer-dev.fwsc ear-trainer-dev-res.bin ear-trainer-app.bin ear-trainer-recovery-sources.zip ear-trainer-site.tar.gz PUBLIC_SHA256SUMS; do
             if gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | grep -Fxq "$file"; then
               gh release delete-asset "$GITHUB_REF_NAME" "$file" --yes
             fi

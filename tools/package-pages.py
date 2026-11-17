@@ -11,6 +11,7 @@ root = Path(__file__).resolve().parents[1]
 site = root / "build/site"
 public = root / "build/public"
 public.mkdir(parents=True, exist_ok=True)
+(public / "SHA256SUMS").unlink(missing_ok=True) # Retire the colliding legacy manifest name.
 manifest_path = site / "build-info.json"
 manifest = json.loads(manifest_path.read_text())
 manifest.update(channel="attested development", sourceRevision=os.environ["GITHUB_SHA"],
@@ -42,5 +43,5 @@ shutil.copyfile(root / "melodee/build/melodee.bin", public / "ear-trainer-app.bi
 with tarfile.open(public / "ear-trainer-site.tar.gz", "w:gz") as archive:
     archive.add(site, arcname=".")
 checksums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n"
-                    for p in sorted(public.iterdir()) if p.is_file() and p.name != "SHA256SUMS")
-(public / "SHA256SUMS").write_text(checksums)
+                    for p in sorted(public.iterdir()) if p.is_file() and p.name != "PUBLIC_SHA256SUMS")
+(public / "PUBLIC_SHA256SUMS").write_text(checksums)

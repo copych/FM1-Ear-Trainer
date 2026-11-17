@@ -30,3 +30,12 @@ attestations and complete matching/checksummed asset set before making the
 draft public; existing public tags are never overwritten. The Ear Trainer
 product identity stays `FM-1_327008` and does not use Melodee's version-derived
 product IDs. Release notes must state remaining hardware-validation limits.
+
+The package manifest is named `PUBLIC_SHA256SUMS` to avoid a duplicate asset
+name with the shared builder's root `SHA256SUMS`. If only the builder's draft
+upload fails after successful tests/attestation, `finalize-release.yml` can use
+that run's existing artifacts. It requires the exact tag commit, successful
+build/test/attestation/artifact steps and all four recovery jobs, then repeats
+attestation, byte, source and archive validation before publishing. Never use
+this workflow to bypass a failed build, test or attestation, and never retag a
+public release.

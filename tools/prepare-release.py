@@ -22,6 +22,7 @@ from fm1pkg_make import sfc
 TARGETS = ("windows-x64", "linux-x64", "macos-arm64", "macos-x64")
 PUBLIC = ("ear-trainer-dev.fwsc", "ear-trainer-dev-res.bin", "ear-trainer-app.bin",
           "ear-trainer-recovery-sources.zip", "ear-trainer-site.tar.gz")
+SUM_NAME = "PUBLIC_SHA256SUMS" # Distinct from the shared builder's root SHA256SUMS asset.
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -41,7 +42,7 @@ def prepare(public, native, output, version, commit, ref):
     project = json.loads((ROOT / "project.json").read_text())
     assert version == project["version"] == VERSION and ref == f"refs/tags/v{version}"
     assert not output.exists(), "Use a fresh release output directory"
-    sums((public / "SHA256SUMS").read_text(), lambda n: (public / n).read_bytes(), PUBLIC)
+    sums((public / SUM_NAME).read_text(), lambda n: (public / n).read_bytes(), PUBLIC)
     package = Package(public / "ear-trainer-dev.fwsc")
     assert package.product == project["product"], "Wrong firmware product"
     app = (public / "ear-trainer-app.bin").read_bytes()

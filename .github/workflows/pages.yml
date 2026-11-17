@@ -39,7 +39,7 @@ jobs:
           cd attested
           sha256sum -c SHA256SUMS
           cd build/public
-          sha256sum -c SHA256SUMS
+          sha256sum -c PUBLIC_SHA256SUMS
           for file in ear-trainer-site.tar.gz ear-trainer-dev.fwsc ear-trainer-dev-res.bin ear-trainer-recovery-sources.zip; do
             gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" \
               --signer-workflow zvenson/fm1-build/.github/workflows/build.yml \
